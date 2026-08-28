@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `e05c934`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `e2f26ba`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -33,6 +33,12 @@ QR once before chats can appear.
 Hosted authentication uses a custom Clerk OAuth flow with Google as the only
 visible sign-in option. Do not restore Clerk's prebuilt sign-in widget, email or
 password fields, or a separate sign-up link.
+
+The hosted WhatsApp status check continues every 10 seconds after history is
+complete. If the active chat count changes, the browser reloads the complete
+inbox automatically. Do not stop polling immediately at `historyStatus:
+complete`; WhatsApp can deliver its final chat batch after that state first
+appears.
 
 ## The one rule
 
