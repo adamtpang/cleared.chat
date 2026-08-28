@@ -60,11 +60,10 @@ from Unread and Priorities, decrements the visible queue, and advances to the
 next unread chat. The conversation remains under All and returns to the work
 queues after a newer message. It never changes WhatsApp read state.
 
-Reply drafts use one editable review modal. Confirming the modal copies the
-exact text and opens the matching WhatsApp composer when the chat has a direct
-phone-number identity. Group chats open WhatsApp with the reply still copied.
-The app never presses Send and has no message-send endpoint; Adam performs that
-final action in WhatsApp.
+Reply drafts use one editable review modal. For a synced WhatsApp conversation,
+Adam's direct click on `Send reply` sends the exact recipient and text shown in
+that modal. The endpoint rejects unconfirmed, invalid, or unknown recipients and
+deduplicates repeated request IDs. Non-WhatsApp drafts remain copy-only.
 
 WhatsApp protocol, key-distribution, history-sync, and app-state events are
 control traffic. `web/whatsapp.mjs` drops them at ingestion and removes old
@@ -96,7 +95,9 @@ Agents must **never** send, reply, react, archive, mark read, post, email, DM, o
 otherwise communicate externally as Adam. This remains true even when Adam says
 `send`, says `yes`, or approves exact wording. Agents may read context, draft,
 revise, and present copy-ready text. Adam performs the final communication
-action manually.
+action manually. In cleared.chat, Adam's own authenticated click on the final
+review modal is that manual action. Agents, triage, drafting, background jobs,
+and automated tests must never invoke `/api/wa/send` or the modal's Send control.
 
 ## How it works
 
@@ -105,8 +106,8 @@ action manually.
 3. Every open loop is scored by importance x urgency and classified as reply,
    task-first, later, or no reply owed.
 4. Unclear intent or facts produce one clarifying question before any draft.
-5. Drafts are editable, contain no em dashes or emojis, and enter WhatsApp only
-   through the one-confirmation copy-and-open handoff.
+5. Drafts are editable, contain no em dashes or emojis, and a synced WhatsApp
+   reply sends only after Adam presses the one final confirmation control.
 
 ## Private state
 

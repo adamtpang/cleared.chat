@@ -32,6 +32,7 @@ import {
   applyUnreadReference as applyWhatsAppUnreadReference,
   resyncUnreadState as resyncWhatsAppUnreadState,
   setContactAlias as setWhatsAppContactAlias,
+  sendWhatsAppText,
 } from './whatsapp.mjs';
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
 import { buildVoiceNotesMarkdown, voiceNoteStats } from './voice-export.mjs';
@@ -1740,6 +1741,15 @@ const server = createServer(async (req, res) => {
         .filter((x) => x.text)
         .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       return send(res, 200, { messages, kind: 'chat' });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/wa/send') {
+      const body = await readBody(req);
+      if (body.confirmed !== true) return send(res, 400, { error: 'Final confirmation is required.' });
+      return send(res, 200, await sendWhatsAppText({
+        chatId: body.chatId,
+        text: body.text,
+        requestId: body.requestId,
+      }));
     }
     if (req.method === 'GET' && url.pathname === '/api/wa/status') {
       if (WHATSAPP_DIRECT) await ensureWhatsAppStarted();

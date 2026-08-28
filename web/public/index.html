@@ -337,6 +337,8 @@
   .reply-review textarea{width:100%;min-height:150px;max-height:45vh;resize:vertical;border:1px solid var(--line-2);border-radius:var(--r-md);background:var(--surface-2);color:var(--ink);font:14px/1.5 var(--font);padding:var(--space-3x);outline:none}
   .reply-review textarea:focus{border-color:var(--ring);box-shadow:0 0 0 3px color-mix(in oklch,var(--ring) 25%,transparent)}
   .reply-review .actions{display:flex;justify-content:flex-end;gap:var(--space-2x)}
+  .reply-review .status{min-height:18px;font-size:12px;color:var(--muted-foreground)}
+  .reply-review .status.error{color:var(--destructive)}
 
   /* shadcn semantic tokens are declared at the top of the stylesheet. */
 
@@ -641,14 +643,14 @@
     <div class="chatbody" id="chatbody">
       <div class="chatempty">Pick anyone on the left to open the conversation. Search covers every connected messaging source.</div>
     </div>
-    <!-- Draft workspace. Communication sources stay read-only. -->
+    <!-- Draft workspace. Only the final review modal can send. -->
     <div class="composer">
-      <textarea id="composer" rows="1" placeholder="Edit the copy-ready draft"
+      <textarea id="composer" rows="1" placeholder="Edit the draft"
                 oninput="growComposer(this)"></textarea>
       <div class="cbtns">
         <button class="aibtn" id="aidraftbtn" onclick="aiDraft()" title="Draft this reply with AI">Draft with AI</button>
         <button class="btn" id="copycomposer" onclick="copyComposer(this)">Review reply</button>
-        <span class="send-safety">You press Send in WhatsApp</span>
+        <span class="send-safety">One confirmation before send</span>
       </div>
     </div>
 
@@ -674,18 +676,19 @@
 <div id="snap" hidden></div>
 <div id="paneLabel" hidden></div>
 
-<!-- One confirmation before handing the exact reply to WhatsApp. Nothing sends here. -->
+<!-- The signed-in user makes the final send decision in this modal. -->
 <div class="modal" id="handoffmodal" onclick="if(event.target===this)closeReplyHandoff()">
-  <div class="sheet" style="max-width:560px;height:auto;max-height:86vh">
-    <div class="mhead"><span class="mwho">Review reply</span>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="handofftitle" style="max-width:560px;height:auto;max-height:86vh">
+    <div class="mhead"><span class="mwho" id="handofftitle">Confirm reply</span>
       <button class="x" onclick="closeReplyHandoff()" title="close">&times;</button></div>
     <div class="reply-review">
       <div class="target" id="handofftarget"></div>
       <textarea id="handofftext" aria-label="Reply text"></textarea>
-      <div class="hint2">Confirm once to copy this text and open WhatsApp. You still press Send there.</div>
+      <div class="hint2" id="handoffhint">Review the recipient and exact text before sending.</div>
+      <div class="status" id="handoffstatus" aria-live="polite"></div>
       <div class="actions">
         <button class="act" onclick="closeReplyHandoff()">Cancel</button>
-        <button class="btn" onclick="confirmReplyHandoff()">Copy and open WhatsApp</button>
+        <button class="btn" id="handoffsend" onclick="confirmReplyHandoff(event)">Send reply</button>
       </div>
     </div>
   </div>
@@ -698,8 +701,8 @@
       <button class="x" onclick="closeSettings()" title="close">&times;</button></div>
     <div style="padding:var(--space-4x) var(--space-5x);overflow:auto">
       <div class="setrow">
-        <div><div class="lbl2">Copy-only safety</div><div class="hint2">cleared.chat never sends or changes messages. If intent or facts are unclear, it asks you one question before drafting.</div></div>
-        <div class="ctl"><span class="demoflag" style="color:var(--ok);border-color:rgb(from var(--ok) r g b / 30%);background:rgb(from var(--ok) r g b / 10%)">Read only</span></div>
+        <div><div class="lbl2">Human-confirmed sending</div><div class="hint2">Only your click on the final review modal can send. Triage, AI drafting, and background actions cannot send messages.</div></div>
+        <div class="ctl"><span class="demoflag" style="color:var(--ok);border-color:rgb(from var(--ok) r g b / 30%);background:rgb(from var(--ok) r g b / 10%)">Confirmed</span></div>
       </div>
       <div class="setrow">
         <div><div class="lbl2">Appearance</div><div class="hint2">System follows your OS setting.</div></div>
@@ -1155,7 +1158,7 @@
       + (noise ? '' : clarification
         ? '<div class="dacts"><button class="act primary" onclick="clarifyFor(\''+it.chatId+'\')">Answer question</button><button class="act" onclick="markSolved('+jsq(it.chatId)+',this)">Already solved</button></div>'
         :
-          '<textarea class="dedit" placeholder="Draft reply. Edit, then copy." oninput="autoGrow(this)">'+esc(draft)+'</textarea>'
+          '<textarea class="dedit" placeholder="Draft reply. Edit, then review." oninput="autoGrow(this)">'+esc(draft)+'</textarea>'
           + '<div class="dacts">'
           +   '<button class="act primary" onclick="draftFor(\''+it.chatId+'\')">Write with AI</button>'
           +   '<button class="act" onclick="copyDraft(\''+it.chatId+'\',this)">Review reply</button>'
@@ -1213,51 +1216,103 @@
   }
 
   let pendingHandoff = null;
-  function confirmedCopy(btn, text, chatId){
+  let handoffSending = false;
+  function reviewReply(btn, text, chatId){
     const id = chatId || openId || '';
     const source = ALL.find((item) => item.id === id);
     const priority = window.__items[id];
-    pendingHandoff = { btn, chatId:id, originalLabel:btn.textContent || 'Review reply' };
+    const canSend = /^wa:/.test(id);
+    const requestId = crypto.randomUUID
+      ? crypto.randomUUID()
+      : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+    pendingHandoff = { btn, chatId:id, canSend, requestId, originalLabel:btn.textContent || 'Review reply' };
+    handoffSending = false;
     $('#handofftarget').textContent = 'To ' + (source?.who || priority?.who || 'this conversation');
     $('#handofftext').value = noEm(text);
+    $('#handofftext').readOnly = false;
+    $('#handoffstatus').textContent = '';
+    $('#handoffstatus').classList.remove('error');
+    $('#handoffhint').textContent = canSend
+      ? 'Your click below sends this exact reply through your linked WhatsApp account.'
+      : 'Direct sending is available for WhatsApp. This action will copy the reply instead.';
+    $('#handoffsend').textContent = canSend ? 'Send reply' : 'Copy reply';
+    $('#handoffsend').disabled = false;
     $('#handoffmodal').classList.add('on');
     setTimeout(() => $('#handofftext').focus(), 0);
     return false;
   }
 
   function closeReplyHandoff(){
+    if(handoffSending) return;
     $('#handoffmodal').classList.remove('on');
     pendingHandoff = null;
   }
 
-  function whatsAppDraftUrl(chatId, text){
-    const jid = String(chatId || '').replace(/^wa:/, '');
-    if(jid.endsWith('@s.whatsapp.net')){
-      const phone = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
-      if(phone) return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
-    }
-    return 'https://web.whatsapp.com/';
-  }
-
-  function confirmReplyHandoff(){
-    if(!pendingHandoff) return;
+  async function confirmReplyHandoff(event){
+    if(!event?.isTrusted || !pendingHandoff || handoffSending) return;
     const handoff = pendingHandoff;
     const text = noEm($('#handofftext').value.trim());
     if(!text) return;
     $('#handofftext').value = text;
-    if(navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
-    else { $('#handofftext').select(); document.execCommand('copy'); }
-    $('#handoffmodal').classList.remove('on');
-    pendingHandoff = null;
-    if(handoff.btn){
-      handoff.btn.classList.add('done');
-      handoff.btn.textContent = 'Copied';
-      setTimeout(() => {
-        handoff.btn.classList.remove('done');
-        handoff.btn.textContent = handoff.originalLabel;
-      }, 1400);
+    if(!handoff.canSend){
+      if(navigator.clipboard) await navigator.clipboard.writeText(text);
+      else { $('#handofftext').select(); document.execCommand('copy'); }
+      $('#handoffmodal').classList.remove('on');
+      pendingHandoff = null;
+      if(handoff.btn){
+        handoff.btn.classList.add('done');
+        handoff.btn.textContent = 'Copied';
+        setTimeout(() => {
+          handoff.btn.classList.remove('done');
+          handoff.btn.textContent = handoff.originalLabel;
+        }, 1400);
+      }
+      return;
     }
-    window.open(whatsAppDraftUrl(handoff.chatId, text), '_blank', 'noopener');
+
+    handoffSending = true;
+    $('#handoffsend').disabled = true;
+    $('#handoffsend').textContent = 'Sending';
+    $('#handofftext').readOnly = true;
+    $('#handoffstatus').classList.remove('error');
+    $('#handoffstatus').textContent = 'Sending through your linked WhatsApp account.';
+    try{
+      const response = await fetch('/api/wa/send', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          chatId:handoff.chatId,
+          text,
+          requestId:handoff.requestId,
+          confirmed:true
+        })
+      });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'WhatsApp could not send this reply.');
+      handoffSending = false;
+      $('#handoffmodal').classList.remove('on');
+      pendingHandoff = null;
+      if(openId === handoff.chatId) setComposer('');
+      if(handoff.btn){
+        handoff.btn.classList.add('done');
+        handoff.btn.textContent = 'Sent';
+        setTimeout(() => {
+          handoff.btn.classList.remove('done');
+          handoff.btn.textContent = handoff.originalLabel;
+        }, 1800);
+      }
+      setTimeout(() => {
+        if(openId === handoff.chatId) openChat(handoff.chatId);
+        loadEverything();
+      }, 700);
+    }catch(error){
+      handoffSending = false;
+      $('#handofftext').readOnly = false;
+      $('#handoffsend').disabled = false;
+      $('#handoffsend').textContent = 'Try sending again';
+      $('#handoffstatus').classList.add('error');
+      $('#handoffstatus').textContent = String(error.message || error);
+    }
   }
 
   function copyDraft(chatId, btn){
@@ -1266,7 +1321,7 @@
     const text = noEm((ta && ta.value) || it.draft || '');
     if (!text) return;
     if (ta) { ta.value = text; it.draft = text; }
-    confirmedCopy(btn, text, chatId);
+    reviewReply(btn, text, chatId);
   }
 
   // ---------- settings, theme, composer ----------
@@ -1691,7 +1746,7 @@
     if(show) $('#chatin').focus();
     else if(openId) $('#composer').focus();
   }
-  // "Draft with AI" fills the composer. Sources remain read-only.
+  // "Draft with AI" fills the composer. It cannot invoke the confirmed send path.
   function aiDraft(){
     if(!openId){ toggleAi(true); return; }
     toggleAi(true);
@@ -1702,7 +1757,7 @@
     if(!text) return;
     const clean = noEm(text);
     setComposer(clean);
-    confirmedCopy(btn, clean, openId);
+    reviewReply(btn, clean, openId);
   }
 
   // ---------- rolodex (sidebar search + open a conversation) ----------

@@ -276,6 +276,7 @@ const chatsById = new Map();   // id -> { id, title, imgUrl, network:'WhatsApp',
 const messagesById = new Map(); // id -> [{ isSender, senderName, text, timestamp }] oldest -> newest
 const lidToPhone = new Map();
 const contactAliases = new Map();
+const recentSendRequests = new Map();
 let contactAliasesLoaded = false;
 
 export function canonicalWhatsAppJid(raw) {
@@ -732,6 +733,57 @@ async function waitForOpenSocket(timeoutMs = 20_000) {
     await wait(250);
   }
   throw new Error('WhatsApp did not finish reconnecting in time.');
+}
+
+export function validateOutboundText({ chatId, text, requestId } = {}) {
+  const jid = canonicalWhatsAppJid(whatsappJid(chatId));
+  if (!jid || !/@(?:s\.whatsapp\.net|g\.us|lid)$/.test(jid) || jid === 'status@broadcast') {
+    throw new Error('Choose a direct WhatsApp conversation before sending.');
+  }
+  const clean = String(text || '')
+    .replace(/\u2014/g, ',')
+    .replace(/\u2013/g, '-')
+    .trim();
+  if (!clean) throw new Error('Reply text is required.');
+  if (clean.length > 10_000) throw new Error('Reply text is too long.');
+  const id = String(requestId || '').trim();
+  if (!/^[a-z0-9-]{16,80}$/i.test(id)) throw new Error('A valid confirmation request is required.');
+  return { jid, text: clean, requestId: id };
+}
+
+export async function sendWhatsAppText(input = {}) {
+  if (!chatsById.size) loadStore();
+  const outbound = validateOutboundText(input);
+  if (!chatsById.has(outbound.jid)) throw new Error('This WhatsApp conversation is not in your synced inbox.');
+
+  const duplicate = recentSendRequests.get(outbound.requestId);
+  if (duplicate) return duplicate;
+
+  const operation = (async () => {
+    await ensureWhatsAppStarted();
+    const activeSocket = await waitForOpenSocket();
+    const response = await activeSocket.sendMessage(
+      outbound.jid,
+      { text: outbound.text },
+      { messageId: outbound.requestId.replace(/-/g, '').toUpperCase() },
+    );
+    return {
+      ok: true,
+      chatId: toWhatsAppSourceId(outbound.jid),
+      messageId: response?.key?.id || outbound.requestId,
+      sentAt: new Date().toISOString(),
+    };
+  })();
+
+  recentSendRequests.set(outbound.requestId, operation);
+  try {
+    const result = await operation;
+    setTimeout(() => recentSendRequests.delete(outbound.requestId), 10 * 60 * 1000).unref?.();
+    return result;
+  } catch (error) {
+    recentSendRequests.delete(outbound.requestId);
+    throw error;
+  }
 }
 
 // Rebuild unread state from WhatsApp's encrypted app-state snapshot. Clearing

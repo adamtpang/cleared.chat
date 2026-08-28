@@ -11,6 +11,7 @@ import {
   normalizeContactPatch,
   registerLidMappings,
   toWhatsAppSourceId,
+  validateOutboundText,
   whatsappJid,
 } from './whatsapp.mjs';
 
@@ -25,6 +26,28 @@ test('direct WhatsApp source detection accepts people and groups', () => {
   assert.equal(isWhatsAppChatId('wa:60123456789@s.whatsapp.net'), true);
   assert.equal(isWhatsAppChatId('120363000000000000@g.us'), true);
   assert.equal(isWhatsAppChatId('gmail:thread-1'), false);
+});
+
+test('outbound text requires a confirmed WhatsApp conversation', () => {
+  const outbound = validateOutboundText({
+    chatId: 'wa:60123456789@s.whatsapp.net',
+    text: 'yes, let us do it\u2014tomorrow',
+    requestId: '12345678-1234-4234-9234-123456789abc',
+  });
+  assert.equal(outbound.jid, '60123456789@s.whatsapp.net');
+  assert.equal(outbound.text, 'yes, let us do it,tomorrow');
+});
+
+test('outbound text rejects non-WhatsApp targets and missing confirmation IDs', () => {
+  assert.throws(() => validateOutboundText({
+    chatId: 'gmail:thread-1',
+    text: 'hello',
+    requestId: '12345678-1234-4234-9234-123456789abc',
+  }), /WhatsApp conversation/);
+  assert.throws(() => validateOutboundText({
+    chatId: 'wa:60123456789@s.whatsapp.net',
+    text: 'hello',
+  }), /confirmation request/);
 });
 
 test('WhatsApp chat updates preserve archive and inbox state', () => {

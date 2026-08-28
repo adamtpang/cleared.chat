@@ -19,8 +19,8 @@ current architecture, constraints, and handoff state.
 
 cleared.chat is a local-first messaging client. Direct WhatsApp sync is the
 primary source. The app ranks open loops, transcribes voice notes, asks for
-missing context, and prepares editable drafts. The human always performs the
-final communication action.
+missing context, and prepares editable drafts. The signed-in human may perform
+the final communication action by pressing Send in the explicit review modal.
 
 ## Communication safety
 
@@ -29,6 +29,10 @@ final communication action.
 - This rule remains absolute even if Adam says `send`, says `yes`, or approves
   exact wording.
 - Reading context, drafting, revising, copying, and presenting text are allowed.
+- The product may send a WhatsApp reply only when Adam directly presses the
+  final confirmation control after reviewing the exact recipient and text.
+  Agents, triage, drafting, background jobs, and automated tests must never
+  invoke that send control or its API endpoint.
 - Never publish or expose Adam's private information.
 
 ## Runtime

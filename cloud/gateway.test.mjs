@@ -71,6 +71,19 @@ test('an authenticated browser reaches its own live WhatsApp worker', async (t) 
   const status = await response.json();
   assert.equal(status.status, 'unpaired');
   assert.equal(status.registered, false);
+
+  const unconfirmedSend = await fetch(`${base}/api/wa/send`, {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chatId: 'wa:60123456789@s.whatsapp.net',
+      text: 'test reply',
+      requestId: '12345678-1234-4234-9234-123456789abc',
+      confirmed: false,
+    }),
+  });
+  assert.equal(unconfirmedSend.status, 400);
+  assert.deepEqual(await unconfirmedSend.json(), { error: 'Final confirmation is required.' });
 });
 
 test('Clerk Google login reuses an existing account and protects anonymous requests', async (t) => {
