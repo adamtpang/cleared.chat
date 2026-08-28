@@ -83,6 +83,12 @@ test('Clerk Google login reuses an existing account and protects anonymous reque
   };
   const clerkClient = {
     async authenticateRequest(request) {
+      if (request.headers.get('x-test-clerk-handshake')) {
+        const headers = new Headers({ location: '/app' });
+        headers.append('set-cookie', '__session=test-session; Path=/; HttpOnly');
+        headers.append('set-cookie', '__refresh=test-refresh; Path=/; HttpOnly');
+        return { isAuthenticated: false, status: 'handshake', headers };
+      }
       const userId = request.headers.get('x-test-clerk-user');
       if (!userId) return { isAuthenticated: false, status: 'signed-out', headers: new Headers() };
       return {
@@ -133,6 +139,16 @@ test('Clerk Google login reuses an existing account and protects anonymous reque
 
   const anonymous = await fetch(`${base}/api/account`);
   assert.equal(anonymous.status, 401);
+
+  const handshake = await fetch(`${base}/app`, {
+    redirect: 'manual',
+    headers: { 'x-test-clerk-handshake': '1' },
+  });
+  assert.equal(handshake.status, 307);
+  assert.deepEqual(handshake.headers.getSetCookie(), [
+    '__session=test-session; Path=/; HttpOnly',
+    '__refresh=test-refresh; Path=/; HttpOnly',
+  ]);
 
   const account = await fetch(`${base}/api/account`, {
     headers: { 'x-test-clerk-user': 'user_google_owner' },

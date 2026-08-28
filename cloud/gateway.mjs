@@ -117,6 +117,18 @@ function clerkEmail(clerkUser) {
   return primary.emailAddress;
 }
 
+function clerkStateHeaders(headers) {
+  const result = {};
+  headers.forEach((value, name) => {
+    if (name.toLowerCase() !== 'set-cookie') result[name] = value;
+  });
+  const cookies = typeof headers.getSetCookie === 'function'
+    ? headers.getSetCookie()
+    : [headers.get('set-cookie')].filter(Boolean);
+  if (cookies.length) result['Set-Cookie'] = cookies;
+  return result;
+}
+
 function appHeaders(clerkFrontendApi = '') {
   const clerkScript = clerkFrontendApi ? ` ${new URL(clerkFrontendApi).origin}` : '';
   return {
@@ -220,9 +232,7 @@ export function createGateway(options = {}) {
       const sessionToken = parseCookies(req.headers.cookie)[COOKIE] || '';
       const clerkIdentity = clerkConfigured ? await authenticateClerk(req) : null;
       if (clerkIdentity?.state.status === 'handshake') {
-        const headers = {};
-        clerkIdentity.state.headers.forEach((value, name) => { headers[name] = value; });
-        res.writeHead(307, headers);
+        res.writeHead(307, clerkStateHeaders(clerkIdentity.state.headers));
         return res.end();
       }
       const user = clerkConfigured ? clerkIdentity.user : accounts.userForSession(sessionToken);
