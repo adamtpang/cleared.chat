@@ -72,3 +72,73 @@ test('an authenticated browser reaches its own live WhatsApp worker', async (t) 
   assert.equal(status.status, 'unpaired');
   assert.equal(status.registered, false);
 });
+
+test('Clerk Google login reuses an existing account and protects anonymous requests', async (t) => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'cleared-clerk-'));
+  const publishableKey = `pk_test_${Buffer.from('clerk.test$').toString('base64')}`;
+  const workers = {
+    async get() { throw new Error('worker should not start in this test'); },
+    async restart() {},
+    stopAll() {},
+  };
+  const clerkClient = {
+    async authenticateRequest(request) {
+      const userId = request.headers.get('x-test-clerk-user');
+      if (!userId) return { isAuthenticated: false, status: 'signed-out', headers: new Headers() };
+      return {
+        isAuthenticated: true,
+        status: 'signed-in',
+        headers: new Headers(),
+        toAuth: () => ({ userId, sessionId: 'session_google_owner' }),
+      };
+    },
+    users: {
+      async getUser() {
+        return {
+          primaryEmailAddressId: 'email_owner',
+          emailAddresses: [{
+            id: 'email_owner',
+            emailAddress: 'owner@example.com',
+            verification: { status: 'verified' },
+          }],
+        };
+      },
+    },
+    sessions: { async revokeSession() {} },
+  };
+  const gateway = createGateway({
+    dataDir,
+    production: false,
+    workerManager: workers,
+    clerkClient,
+    clerkPublishableKey: publishableKey,
+    clerkFrontendApi: 'https://clerk.test',
+    clerkAuthorizedParties: ['http://127.0.0.1'],
+  });
+  const original = await gateway.accounts.createUser('owner@example.com', 'a-secure-test-password');
+  gateway.server.listen(0, '127.0.0.1');
+  await once(gateway.server, 'listening');
+  const base = `http://127.0.0.1:${gateway.server.address().port}`;
+  t.after(async () => {
+    gateway.server.close();
+    await once(gateway.server, 'close');
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  const login = await fetch(`${base}/login`);
+  assert.equal(login.status, 200);
+  const loginHtml = await login.text();
+  assert.match(loginHtml, /Continue with Google/);
+  assert.match(loginHtml, /clerk\.test\/npm\/@clerk\/clerk-js/);
+
+  const anonymous = await fetch(`${base}/api/account`);
+  assert.equal(anonymous.status, 401);
+
+  const account = await fetch(`${base}/api/account`, {
+    headers: { 'x-test-clerk-user': 'user_google_owner' },
+  });
+  assert.equal(account.status, 200);
+  assert.deepEqual(await account.json(), { email: 'owner@example.com', aiReady: false });
+  assert.equal(gateway.accounts.userForClerkId('user_google_owner').id, original.id);
+  assert.equal(gateway.accounts.listUserIds().length, 1);
+});

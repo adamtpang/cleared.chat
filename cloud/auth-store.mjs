@@ -51,6 +51,7 @@ export class AccountStore {
         email TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         password_salt TEXT NOT NULL,
+        clerk_user_id TEXT,
         created_at TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS sessions (
@@ -70,6 +71,11 @@ export class AccountStore {
         PRIMARY KEY (user_id, kind)
       );
     `);
+    const userColumns = this.db.prepare('PRAGMA table_info(users)').all();
+    if (!userColumns.some((column) => column.name === 'clerk_user_id')) {
+      this.db.exec('ALTER TABLE users ADD COLUMN clerk_user_id TEXT');
+    }
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_clerk_user_id ON users(clerk_user_id)');
   }
 
   async createUser(email, password) {
@@ -103,6 +109,58 @@ export class AccountStore {
     const expected = Buffer.from(row.password_hash, 'base64');
     if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
     return { id: row.id, email: row.email, createdAt: row.created_at };
+  }
+
+  userForEmail(email) {
+    const row = this.db.prepare('SELECT id, email, created_at FROM users WHERE email = ?').get(normalizeEmail(email));
+    return row ? { id: row.id, email: row.email, createdAt: row.created_at } : null;
+  }
+
+  userForClerkId(clerkUserId) {
+    if (!clerkUserId) return null;
+    const row = this.db.prepare(`
+      SELECT id, email, created_at
+      FROM users
+      WHERE clerk_user_id = ?
+    `).get(String(clerkUserId));
+    return row ? { id: row.id, email: row.email, createdAt: row.created_at } : null;
+  }
+
+  findOrCreateClerkUser(clerkUserId, email) {
+    const externalId = String(clerkUserId || '').trim();
+    const normalized = normalizeEmail(email);
+    if (!externalId) throw new Error('Clerk did not provide a user ID.');
+    if (!/^\S+@\S+\.\S+$/.test(normalized)) throw new Error('Clerk did not provide a valid email address.');
+
+    const linked = this.userForClerkId(externalId);
+    if (linked) return linked;
+
+    const existing = this.db.prepare(`
+      SELECT id, email, clerk_user_id, created_at
+      FROM users
+      WHERE email = ?
+    `).get(normalized);
+    if (existing) {
+      if (existing.clerk_user_id && existing.clerk_user_id !== externalId) {
+        throw new Error('That email is already linked to another Google account.');
+      }
+      this.db.prepare('UPDATE users SET clerk_user_id = ? WHERE id = ?').run(externalId, existing.id);
+      return { id: existing.id, email: existing.email, createdAt: existing.created_at };
+    }
+
+    const user = { id: randomUUID(), email: normalized, createdAt: new Date().toISOString() };
+    this.db.prepare(`
+      INSERT INTO users (id, email, password_hash, password_salt, clerk_user_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      user.id,
+      user.email,
+      randomBytes(64).toString('base64'),
+      randomBytes(16).toString('base64'),
+      externalId,
+      user.createdAt,
+    );
+    return user;
   }
 
   createSession(userId) {

@@ -41,11 +41,12 @@ visible next action.
 
 ## Hosted accounts
 
-The hosted beta adds normal email and password accounts around the same inbox.
-After signing in, each account gets an isolated WhatsApp worker, credential
-directory, message cache, triage history, and encrypted AI settings. Pair from
-the inbox Settings panel once, then the server keeps that linked-device session
-connected and syncing even when the browser is closed.
+The hosted beta uses Clerk for Google sign-in. After continuing with Google,
+each account gets an isolated WhatsApp worker, credential directory, message
+cache, triage history, and encrypted AI settings. Pair from the inbox Settings
+panel once, then the server keeps that linked-device session connected and
+syncing even when the browser is closed. Existing password accounts link to a
+verified Google account with the same email, preserving the paired workspace.
 
 The public landing page stays on Vercel. The private app runs as a persistent
 container behind `app.cleared.chat`, because WhatsApp linking needs a durable

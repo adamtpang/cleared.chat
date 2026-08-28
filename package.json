@@ -6,5 +6,8 @@
   "scripts": {
     "start:cloud": "node cloud/gateway.mjs",
     "test": "node --test web/*.test.mjs cloud/*.test.mjs"
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.16.12"
   }
 }

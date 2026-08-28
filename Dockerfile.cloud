@@ -6,6 +6,9 @@ RUN apt-get update \
 
 WORKDIR /app
 
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
 COPY web/package.json web/package-lock.json ./web/
 RUN cd web && npm ci --omit=dev
 

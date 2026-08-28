@@ -6,11 +6,25 @@ message cache, and triage snapshots.
 
 ## Runtime
 
-- `cloud/gateway.mjs` owns signup, login, sessions, encrypted secrets, and
-  routing.
+- `cloud/gateway.mjs` verifies Clerk sessions, maps Google identities to local
+  account IDs, stores encrypted secrets, and routes private requests.
 - `cloud/worker-manager.mjs` starts one `web/server.mjs` process per account.
 - `/data` contains the account database and all per-user WhatsApp state.
 - `Dockerfile.cloud` includes the Node app and local voice-note transcription.
+
+## Identity setup
+
+1. Create a Clerk application and enable Google under SSO connections.
+2. Use Clerk's shared Google credentials for development. For production, add
+   a production Google OAuth client to the Clerk production instance.
+3. Set `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in the runtime.
+4. Set `APP_ORIGIN` and `CLERK_AUTHORIZED_PARTIES` to
+   `https://app.cleared.chat`.
+5. Keep Clerk keys unset for local password-mode development.
+
+When a verified Google email matches an existing password account, the gateway
+links Clerk to that account's existing internal ID. Its WhatsApp pairing,
+message cache, snapshots, and saved AI key stay attached to the same workspace.
 
 ## Railway setup
 
@@ -20,7 +34,8 @@ message cache, and triage snapshots.
 4. Set `MAX_ACCOUNTS` to the hosted beta capacity, such as `25`.
 5. Optionally set `ANTHROPIC_API_KEY` to provide AI for every account. Without
    it, each user can save an encrypted Anthropic key on the Account page.
-6. Generate the Railway domain and verify `/health` returns `{ "ok": true }`.
+6. Generate the Railway domain and verify `/health` reports `"ok": true` and
+   `"auth": "clerk"`.
 7. Add `app.cleared.chat` as the service custom domain.
 
 The volume is mandatory. A deploy without it loses account sessions and
@@ -28,9 +43,11 @@ WhatsApp linked-device credentials.
 
 ## Security boundary
 
-- Passwords use scrypt with a unique salt.
-- Session cookies are HTTP-only, secure in production, and expire after 30
-  days.
+- Clerk owns Google authentication and hosted session cookies.
+- The gateway verifies Clerk session tokens and restricts authorized parties to
+  the hosted app origin.
+- Legacy local passwords remain scrypt protected and are disabled when Clerk is
+  configured.
 - User-provided AI keys are encrypted with AES-256-GCM.
 - WhatsApp directories are separated by account ID.
 - The app drafts and copies text. It has no send endpoint and never sends a

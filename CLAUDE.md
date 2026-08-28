@@ -15,10 +15,13 @@ The runtime is `web/server.mjs`, the direct WhatsApp adapter is
 shell is `desktop/main.js`. Gmail and Discord are optional adapters. The Beeper
 Desktop adapter is legacy, disabled by default, and not required.
 
-Hosted accounts enter through `cloud/gateway.mjs`. Each account is routed to an
-isolated `web/server.mjs` worker with separate WhatsApp credentials, messages,
-snapshots, and encrypted AI settings. `Dockerfile.cloud` is the persistent
-container runtime. The volume must be mounted at `/data`.
+Hosted accounts enter through `cloud/gateway.mjs`. When Clerk keys are set, the
+gateway verifies Google sessions and links a verified Google email to the
+existing internal account ID. Local development keeps the password fallback
+when Clerk is not configured. Each account is routed to an isolated
+`web/server.mjs` worker with separate WhatsApp credentials, messages, snapshots,
+and encrypted AI settings. `Dockerfile.cloud` is the persistent container
+runtime. The volume must be mounted at `/data`.
 
 ## The one rule
 

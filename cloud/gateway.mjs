@@ -4,9 +4,10 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { createClerkClient } from '@clerk/backend';
 import { AccountStore } from './auth-store.mjs';
 import { WorkerManager } from './worker-manager.mjs';
-import { accountPage, authPage } from './pages.mjs';
+import { accountPage, authPage, clerkAuthPage } from './pages.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(DIR, '..');
@@ -84,10 +85,43 @@ function authRateLimited(req) {
   return recent.length > 8;
 }
 
-function appHeaders() {
+function clerkFrontendApiFromPublishableKey(publishableKey) {
+  const encoded = String(publishableKey || '').replace(/^pk_(?:test|live)_/, '');
+  if (!encoded) throw new Error('CLERK_PUBLISHABLE_KEY is invalid.');
+  const hostname = Buffer.from(encoded, 'base64').toString('utf8').replace(/\$$/, '');
+  if (!/^[a-z0-9.-]+$/i.test(hostname) || !hostname.includes('.')) {
+    throw new Error('CLERK_PUBLISHABLE_KEY does not contain a valid Frontend API hostname.');
+  }
+  return `https://${hostname}`;
+}
+
+function webRequest(req) {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (Array.isArray(value)) value.forEach((item) => headers.append(name, item));
+    else if (value !== undefined) headers.set(name, value);
+  }
+  return new Request(new URL(req.url, requestOrigin(req)), {
+    method: req.method || 'GET',
+    headers,
+  });
+}
+
+function clerkEmail(clerkUser) {
+  const addresses = Array.isArray(clerkUser?.emailAddresses) ? clerkUser.emailAddresses : [];
+  const primary = addresses.find((address) => address.id === clerkUser.primaryEmailAddressId) || addresses[0];
+  if (!primary?.emailAddress) throw new Error('Your Google account does not expose an email address.');
+  if (primary.verification && primary.verification.status !== 'verified') {
+    throw new Error('Verify your Google email address before signing in.');
+  }
+  return primary.emailAddress;
+}
+
+function appHeaders(clerkFrontendApi = '') {
+  const clerkScript = clerkFrontendApi ? ` ${new URL(clerkFrontendApi).origin}` : '';
   return {
     'Cache-Control': 'no-store',
-    'Content-Security-Policy': "default-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https:; media-src 'self' data: https:; frame-ancestors 'none'",
+    'Content-Security-Policy': `default-src 'self' data: https:; script-src 'self' 'unsafe-inline'${clerkScript} https://challenges.cloudflare.com https://*.protect.clerk.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https:; media-src 'self' data: https:; worker-src 'self' blob:; frame-src 'self' https://challenges.cloudflare.com https://*.protect.clerk.com; form-action 'self'; frame-ancestors 'none'`,
   };
 }
 
@@ -128,27 +162,78 @@ export function createGateway(options = {}) {
   const secureCookies = production || process.env.COOKIE_SECURE === '1';
   const platformAi = Boolean(process.env.ANTHROPIC_API_KEY);
   const maxAccounts = Math.max(1, Number(process.env.MAX_ACCOUNTS || 25));
+  const clerkPublishableKey = options.clerkPublishableKey ?? process.env.CLERK_PUBLISHABLE_KEY ?? '';
+  const clerkSecretKey = options.clerkSecretKey ?? process.env.CLERK_SECRET_KEY ?? '';
+  const clerkConfigured = Boolean(clerkPublishableKey || clerkSecretKey || options.clerkClient);
+  if (clerkConfigured && (!clerkPublishableKey || (!clerkSecretKey && !options.clerkClient))) {
+    throw new Error('Clerk requires both CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY.');
+  }
+  const clerk = clerkConfigured
+    ? options.clerkClient || createClerkClient({ secretKey: clerkSecretKey, publishableKey: clerkPublishableKey })
+    : null;
+  const clerkFrontendApi = clerkConfigured
+    ? options.clerkFrontendApi || process.env.CLERK_FRONTEND_API_URL || clerkFrontendApiFromPublishableKey(clerkPublishableKey)
+    : '';
+  const clerkAuthorizedParties = options.clerkAuthorizedParties || String(
+    process.env.CLERK_AUTHORIZED_PARTIES || process.env.APP_ORIGIN || (production ? 'https://app.cleared.chat' : 'http://127.0.0.1'),
+  ).split(',').map((value) => value.trim()).filter(Boolean);
+
+  const authenticateClerk = async (req) => {
+    const state = await clerk.authenticateRequest(webRequest(req), {
+      authorizedParties: clerkAuthorizedParties,
+    });
+    if (!state.isAuthenticated) return { state, auth: null, user: null };
+
+    const auth = state.toAuth();
+    let user = accounts.userForClerkId(auth.userId);
+    if (!user) {
+      const remoteUser = await clerk.users.getUser(auth.userId);
+      const email = clerkEmail(remoteUser);
+      const existing = accounts.userForEmail(email);
+      if (!existing && accounts.listUserIds().length >= maxAccounts) {
+        const error = new Error('The hosted beta is currently full.');
+        error.statusCode = 403;
+        throw error;
+      }
+      user = accounts.findOrCreateClerkUser(auth.userId, email);
+    }
+    return { state, auth, user };
+  };
 
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url, requestOrigin(req));
-      const sessionToken = parseCookies(req.headers.cookie)[COOKIE] || '';
-      const user = accounts.userForSession(sessionToken);
 
       if (req.method === 'GET' && url.pathname === '/health') {
-        return send(res, 200, JSON.stringify({ ok: true }), 'application/json; charset=utf-8');
+        return send(res, 200, JSON.stringify({ ok: true, auth: clerkConfigured ? 'clerk' : 'local' }), 'application/json; charset=utf-8');
       }
       if (req.method === 'GET' && url.pathname === '/icon.svg' && existsSync(ICON)) {
         return send(res, 200, readFileSync(ICON), 'image/svg+xml', { 'Cache-Control': 'public, max-age=86400' });
       }
+
+      const sessionToken = parseCookies(req.headers.cookie)[COOKIE] || '';
+      const clerkIdentity = clerkConfigured ? await authenticateClerk(req) : null;
+      if (clerkIdentity?.state.status === 'handshake') {
+        const headers = {};
+        clerkIdentity.state.headers.forEach((value, name) => { headers[name] = value; });
+        res.writeHead(307, headers);
+        return res.end();
+      }
+      const user = clerkConfigured ? clerkIdentity.user : accounts.userForSession(sessionToken);
+
       if (req.method === 'GET' && url.pathname === '/') {
         return user ? redirect(res, '/app') : redirect(res, '/login');
       }
       if (req.method === 'GET' && ['/login', '/signup'].includes(url.pathname)) {
         if (user) return redirect(res, '/app');
-        return send(res, 200, authPage({ mode: url.pathname.slice(1), error: url.searchParams.get('error') || '' }), 'text/html; charset=utf-8', appHeaders());
+        const error = url.searchParams.get('error') || '';
+        const page = clerkConfigured
+          ? clerkAuthPage({ publishableKey: clerkPublishableKey, frontendApi: clerkFrontendApi, error })
+          : authPage({ mode: url.pathname.slice(1), error });
+        return send(res, 200, page, 'text/html; charset=utf-8', appHeaders(clerkFrontendApi));
       }
       if (req.method === 'POST' && ['/login', '/signup'].includes(url.pathname)) {
+        if (clerkConfigured) return send(res, 405, 'Use Google to continue.', 'text/plain; charset=utf-8', { Allow: 'GET' });
         if (!sameOrigin(req)) return send(res, 403, 'Forbidden', 'text/plain; charset=utf-8');
         if (authRateLimited(req)) return send(res, 429, authPage({ mode: url.pathname.slice(1), error: 'Too many attempts. Wait one minute.' }), 'text/html; charset=utf-8', appHeaders());
         const form = await readForm(req);
@@ -169,6 +254,10 @@ export function createGateway(options = {}) {
       }
       if (req.method === 'POST' && url.pathname === '/logout') {
         if (!sameOrigin(req)) return send(res, 403, 'Forbidden', 'text/plain; charset=utf-8');
+        if (clerkConfigured) {
+          if (clerkIdentity.auth?.sessionId) await clerk.sessions.revokeSession(clerkIdentity.auth.sessionId);
+          return redirect(res, '/login', { 'Set-Cookie': clearCookie(secureCookies) });
+        }
         accounts.deleteSession(sessionToken);
         return redirect(res, '/login', { 'Set-Cookie': clearCookie(secureCookies) });
       }
@@ -185,7 +274,7 @@ export function createGateway(options = {}) {
           hasPlatformKey: platformAi,
           message: url.searchParams.get('message') || '',
           error: url.searchParams.get('error') || '',
-        }), 'text/html; charset=utf-8', appHeaders());
+        }), 'text/html; charset=utf-8', appHeaders(clerkFrontendApi));
       }
       if (req.method === 'POST' && url.pathname === '/account/ai-key') {
         if (!sameOrigin(req)) return send(res, 403, 'Forbidden', 'text/plain; charset=utf-8');
@@ -205,7 +294,7 @@ export function createGateway(options = {}) {
         return send(res, 200, JSON.stringify({ email: user.email, aiReady: platformAi || accounts.hasSecret(user.id, 'anthropic_api_key') }), 'application/json; charset=utf-8');
       }
       if (req.method === 'GET' && ['/app', '/app/'].includes(url.pathname)) {
-        return send(res, 200, readFileSync(WEB_APP, 'utf8'), 'text/html; charset=utf-8', appHeaders());
+        return send(res, 200, readFileSync(WEB_APP, 'utf8'), 'text/html; charset=utf-8', appHeaders(clerkFrontendApi));
       }
       if (url.pathname.startsWith('/api/')) {
         const worker = await workers.get(user.id);
@@ -214,7 +303,7 @@ export function createGateway(options = {}) {
       return send(res, 404, 'Not found', 'text/plain; charset=utf-8');
     } catch (error) {
       console.error('[gateway]', error);
-      if (!res.headersSent) send(res, 500, JSON.stringify({ error: 'Internal server error.' }), 'application/json; charset=utf-8');
+      if (!res.headersSent) send(res, error.statusCode || 500, JSON.stringify({ error: error.statusCode ? error.message : 'Internal server error.' }), 'application/json; charset=utf-8');
       else res.end();
     }
   });
