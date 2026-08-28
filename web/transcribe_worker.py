@@ -33,7 +33,31 @@ for line in sys.stdin:
             vad_filter=True,
             condition_on_previous_text=False,
         )
-        text = " ".join(segment.text.strip() for segment in segments).strip()
+        duration = float(getattr(info, "duration", 0) or 0)
+        emit({
+            "id": request_id,
+            "stage": "transcribing",
+            "progress": 0,
+            "processedSeconds": 0,
+            "durationSeconds": duration,
+        })
+        parts = []
+        last_progress = -1
+        for segment in segments:
+            clean = segment.text.strip()
+            if clean:
+                parts.append(clean)
+            progress = min(99, round((float(segment.end) / duration) * 100)) if duration else 0
+            if progress >= last_progress + 2:
+                last_progress = progress
+                emit({
+                    "id": request_id,
+                    "stage": "transcribing",
+                    "progress": progress,
+                    "processedSeconds": float(segment.end),
+                    "durationSeconds": duration,
+                })
+        text = " ".join(parts).strip()
         emit({
             "id": request_id,
             "text": text,

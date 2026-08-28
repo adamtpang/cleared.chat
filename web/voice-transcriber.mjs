@@ -49,6 +49,15 @@ function startWorker() {
     try { result = JSON.parse(line); } catch { return; }
     const job = pending.get(result.id);
     if (!job) return;
+    if (result.stage || result.progress !== undefined) {
+      job.onProgress?.({
+        stage: result.stage || 'transcribing',
+        percent: Number(result.progress) || 0,
+        processedSeconds: Number(result.processedSeconds) || 0,
+        durationSeconds: Number(result.durationSeconds) || 0,
+      });
+      return;
+    }
     pending.delete(result.id);
     if (result.error) job.reject(new Error(result.error));
     else job.resolve(result);
@@ -91,12 +100,14 @@ export async function transcribeVoiceBuffer(buffer, options = {}) {
   try {
     const id = `${process.pid}-${Date.now()}-${++sequence}`;
     const result = await new Promise((resolve, reject) => {
+      options.onProgress?.({ stage: 'loading-model', percent: 0, processedSeconds: 0, durationSeconds: 0 });
       const active = startWorker();
       const timeout = setTimeout(() => {
         pending.delete(id);
         reject(new Error('voice-note transcription timed out'));
       }, Number(process.env.WHISPER_TIMEOUT_MS || 10 * 60_000));
       pending.set(id, {
+        onProgress: options.onProgress,
         resolve: (value) => { clearTimeout(timeout); resolve(value); },
         reject: (error) => { clearTimeout(timeout); reject(error); },
       });

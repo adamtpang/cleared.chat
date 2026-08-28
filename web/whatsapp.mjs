@@ -377,6 +377,16 @@ function loadStore() {
     let removedControlMessages = false;
     for (const [id, msgs] of Object.entries(j.messages || {})) {
       const visible = (msgs || []).filter(isVisibleStoredMessage);
+      for (const message of visible) {
+        if (message.kind === 'voice'
+          && ['pending', 'recovering', 'transcribing'].includes(message.transcriptionStatus)) {
+          message.transcriptionStatus = 'failed';
+          message.transcriptionError = 'The previous transcription was interrupted. Retry this voice note.';
+          message.transcriptionProgress = { stage: 'failed', percent: 0 };
+          message.text = '[voice note, transcript unavailable]';
+          removedControlMessages = true;
+        }
+      }
       if (visible.length !== (msgs || []).length) removedControlMessages = true;
       messagesById.set(id, visible);
     }
@@ -598,6 +608,20 @@ async function downloadVoiceAudio(proto) {
   }
 }
 
+function updateVoiceProgress(stored, progress = {}) {
+  const startedAt = stored.transcriptionProgress?.startedAt
+    || stored.transcriptionStartedAt
+    || new Date().toISOString();
+  stored.transcriptionStartedAt = startedAt;
+  stored.transcriptionProgress = {
+    ...stored.transcriptionProgress,
+    ...progress,
+    startedAt,
+    updatedAt: new Date().toISOString(),
+  };
+  scheduleSave();
+}
+
 function queueVoiceTranscription(jid, proto, stored) {
   const id = String(proto.key?.id || stored.key || 'voice');
   const jobKey = `${jid}:${id}`;
@@ -607,23 +631,41 @@ function queueVoiceTranscription(jid, proto, stored) {
   stored.kind = 'voice';
   stored.transcriptionStatus = 'transcribing';
   stored.transcriptionError = null;
-  stored.text = '[voice note, transcribing locally]';
+  stored.text = '[voice note, downloading audio]';
+  updateVoiceProgress(stored, {
+    stage: 'downloading-audio',
+    percent: 0,
+    processedSeconds: 0,
+    durationSeconds: Number(stored.seconds) || 0,
+  });
   const job = (async () => {
     try {
       const audio = await downloadVoiceAudio(proto);
+      updateVoiceProgress(stored, { stage: 'loading-model', percent: 0 });
       const result = await transcribeVoiceBuffer(audio, {
         id,
         mimetype: stored.mimetype,
+        onProgress: (progress) => updateVoiceProgress(stored, {
+          ...progress,
+          durationSeconds: Number(progress.durationSeconds) || Number(stored.seconds) || 0,
+        }),
       });
       stored.transcript = result.text;
       stored.language = result.language;
       stored.transcriptionStatus = result.text ? 'complete' : 'empty';
+      updateVoiceProgress(stored, {
+        stage: stored.transcriptionStatus,
+        percent: 100,
+        processedSeconds: Number(stored.seconds) || 0,
+        durationSeconds: Number(stored.seconds) || 0,
+      });
       stored.text = result.text
         ? `[Voice note transcript] ${result.text}`
         : '[voice note, no speech detected]';
     } catch (error) {
       stored.transcriptionStatus = 'failed';
       stored.transcriptionError = String(error?.message || error).slice(0, 240);
+      updateVoiceProgress(stored, { stage: 'failed' });
       stored.text = '[voice note, transcript unavailable]';
     } finally {
       voiceJobs.delete(jobKey);
@@ -644,64 +686,87 @@ export function validateVoiceRetryRequest({ chatId, messageId } = {}) {
   return { jid, messageId: id };
 }
 
+export function getVoiceTranscriptionStatus(input = {}) {
+  if (!chatsById.size) loadStore();
+  const request = validateVoiceRetryRequest(input);
+  const stored = (messagesById.get(request.jid) || []).find((message) => (
+    message.key === request.messageId && message.kind === 'voice'
+  ));
+  if (!stored) throw new Error('This voice note is not in the synced conversation.');
+  const progress = stored.transcriptionProgress || {};
+  const started = new Date(progress.startedAt || stored.transcriptionStartedAt || 0).getTime();
+  return {
+    ok: true,
+    status: stored.transcriptionStatus || 'pending',
+    stage: progress.stage || stored.transcriptionStatus || 'pending',
+    percent: Math.max(0, Math.min(100, Number(progress.percent) || 0)),
+    processedSeconds: Math.max(0, Number(progress.processedSeconds) || 0),
+    durationSeconds: Math.max(0, Number(progress.durationSeconds) || Number(stored.seconds) || 0),
+    elapsedSeconds: Number.isFinite(started) && started > 0
+      ? Math.max(0, Math.round((Date.now() - started) / 1000))
+      : 0,
+    error: stored.transcriptionStatus === 'failed' ? stored.transcriptionError || 'Transcript unavailable.' : null,
+  };
+}
+
 export async function retryVoiceTranscription(input = {}) {
   if (!chatsById.size) loadStore();
   const request = validateVoiceRetryRequest(input);
   const recoveryKey = `${request.jid}:${request.messageId}`;
-  if (voiceRecoveryRequests.has(recoveryKey)) return voiceRecoveryRequests.get(recoveryKey);
+  const stored = (messagesById.get(request.jid) || []).find((message) => (
+    message.key === request.messageId && message.kind === 'voice'
+  ));
+  if (!stored) throw new Error('This voice note is not in the synced conversation.');
+  if (stored.transcriptionStatus === 'complete') return getVoiceTranscriptionStatus(input);
+  if (voiceRecoveryRequests.has(recoveryKey)) return getVoiceTranscriptionStatus(input);
+
+  stored.transcriptionStatus = 'recovering';
+  stored.transcriptionError = null;
+  stored.transcriptionStartedAt = new Date().toISOString();
+  stored.transcriptionProgress = null;
+  stored.text = '[voice note, recovering audio]';
+  updateVoiceProgress(stored, {
+    stage: 'requesting-audio',
+    percent: 0,
+    processedSeconds: 0,
+    durationSeconds: Number(stored.seconds) || 0,
+  });
 
   const recovery = (async () => {
-    const stored = (messagesById.get(request.jid) || []).find((message) => (
-      message.key === request.messageId && message.kind === 'voice'
-    ));
-    if (!stored) throw new Error('This voice note is not in the synced conversation.');
-    if (stored.transcriptionStatus === 'complete') {
-      return { ok: true, status: 'complete' };
-    }
+    try {
+      await ensureWhatsAppStarted();
+      const activeSocket = await waitForOpenSocket();
+      const messageKey = {
+        remoteJid: request.jid,
+        fromMe: Boolean(stored.isSender),
+        id: request.messageId,
+        ...(stored.participant ? { participant: stored.participant } : {}),
+      };
+      await activeSocket.requestPlaceholderResend(messageKey, {
+        key: messageKey,
+        messageTimestamp: Math.floor(new Date(stored.timestamp || Date.now()).getTime() / 1000),
+        pushName: stored.senderName || undefined,
+      });
 
-    await ensureWhatsAppStarted();
-    const activeSocket = await waitForOpenSocket();
-    const messageKey = {
-      remoteJid: request.jid,
-      fromMe: Boolean(stored.isSender),
-      id: request.messageId,
-      ...(stored.participant ? { participant: stored.participant } : {}),
-    };
-    stored.transcriptionStatus = 'recovering';
-    stored.transcriptionError = null;
-    stored.text = '[voice note, recovering audio]';
-    scheduleSave();
-
-    await activeSocket.requestPlaceholderResend(messageKey, {
-      key: messageKey,
-      messageTimestamp: Math.floor(new Date(stored.timestamp || Date.now()).getTime() / 1000),
-      pushName: stored.senderName || undefined,
-    });
-
-    const deadline = Date.now() + 90_000;
-    while (Date.now() < deadline) {
-      if (stored.transcriptionStatus === 'complete' || stored.transcriptionStatus === 'empty') {
-        return { ok: true, status: stored.transcriptionStatus };
+      const deadline = Date.now() + 10 * 60_000;
+      while (Date.now() < deadline) {
+        if (['complete', 'empty', 'failed'].includes(stored.transcriptionStatus)) return;
+        await wait(500);
       }
-      if (stored.transcriptionStatus === 'failed') {
-        throw new Error(stored.transcriptionError || 'Voice-note transcription failed.');
-      }
-      await wait(500);
+      throw new Error('Voice-note recovery exceeded ten minutes. Retry when the linked phone is online.');
+    } catch (error) {
+      stored.transcriptionStatus = 'failed';
+      stored.transcriptionError = String(error?.message || error).slice(0, 240);
+      stored.text = '[voice note, transcript unavailable]';
+      updateVoiceProgress(stored, { stage: 'failed' });
+    } finally {
+      voiceRecoveryRequests.delete(recoveryKey);
+      scheduleSave();
     }
-
-    stored.transcriptionStatus = 'failed';
-    stored.transcriptionError = 'The linked phone did not return this voice note in time.';
-    stored.text = '[voice note, transcript unavailable]';
-    scheduleSave();
-    throw new Error(stored.transcriptionError);
   })();
 
   voiceRecoveryRequests.set(recoveryKey, recovery);
-  try {
-    return await recovery;
-  } finally {
-    voiceRecoveryRequests.delete(recoveryKey);
-  }
+  return getVoiceTranscriptionStatus(input);
 }
 
 function ingestProtoMessages(msgs) {

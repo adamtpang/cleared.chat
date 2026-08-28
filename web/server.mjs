@@ -34,6 +34,7 @@ import {
   setContactAlias as setWhatsAppContactAlias,
   sendWhatsAppText,
   retryVoiceTranscription as retryWhatsAppVoiceTranscription,
+  getVoiceTranscriptionStatus as getWhatsAppVoiceTranscriptionStatus,
 } from './whatsapp.mjs';
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
 import { buildVoiceNotesMarkdown, voiceNoteStats } from './voice-export.mjs';
@@ -1757,6 +1758,12 @@ const server = createServer(async (req, res) => {
       return send(res, 200, await retryWhatsAppVoiceTranscription({
         chatId: body.chatId,
         messageId: body.messageId,
+      }));
+    }
+    if (req.method === 'GET' && url.pathname === '/api/wa/voice/status') {
+      return send(res, 200, getWhatsAppVoiceTranscriptionStatus({
+        chatId: url.searchParams.get('id'),
+        messageId: url.searchParams.get('messageId'),
       }));
     }
     if (req.method === 'GET' && url.pathname === '/api/wa/status') {

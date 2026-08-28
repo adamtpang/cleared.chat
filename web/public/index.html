@@ -189,7 +189,7 @@
   .voice-note-label{display:flex;align-items:center;gap:7px;margin-bottom:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)}
   .voice-note-label::before{content:"";width:8px;height:8px;border:2px solid currentColor;border-radius:var(--r-full);box-shadow:3px 0 0 -1px currentColor}
   .voice-note-text{white-space:pre-wrap}
-  .voice-retry{margin-top:7px;border:1px solid currentColor;border-radius:var(--r-sm);background:transparent;color:inherit;font:600 11px/1 var(--font);padding:7px 9px;cursor:pointer}
+  .voice-retry{max-width:100%;margin-top:7px;border:1px solid currentColor;border-radius:var(--r-sm);background:transparent;color:inherit;font:600 11px/1.35 var(--font);padding:7px 9px;cursor:pointer;text-align:left;white-space:normal}
   .voice-retry:disabled{opacity:.55;cursor:default}
   /* shrink-to-ellipsis rather than flex:none - a Gmail label carries the
      account address, which is long enough to push the row off-screen */
@@ -1969,7 +1969,7 @@
   async function retryVoiceTranscript(event, chatId, messageId, button){
     event.stopPropagation();
     button.disabled = true;
-    button.textContent = 'Recovering audio';
+    button.textContent = 'Starting voice-note recovery';
     try{
       const response = await fetch('/api/wa/voice/retry', {
         method:'POST',
@@ -1978,13 +1978,87 @@
       });
       const data = await response.json();
       if(!response.ok || data.error) throw new Error(data.error || 'Could not recover this voice note.');
-      await openChat(chatId);
+      await watchVoiceTranscript(chatId, messageId, button, data);
     }catch(error){
       button.disabled = false;
       button.textContent = 'Retry transcript';
       button.title = String(error.message || error);
       $('#err').innerHTML = '<div class="err">'+esc(String(error.message || error))+'</div>';
     }
+  }
+
+  async function watchVoiceTranscript(chatId, messageId, button, initial){
+    let state = initial;
+    const deadline = Date.now() + 11 * 60 * 1000;
+    while(Date.now() < deadline){
+      button.textContent = voiceProgressLabel(state);
+      button.title = voiceProgressTitle(state);
+      if(state.status === 'complete' || state.status === 'empty'){
+        button.textContent = state.status === 'complete' ? 'Transcript ready' : 'Finished, no speech detected';
+        await openChat(chatId);
+        return;
+      }
+      if(state.status === 'failed') throw new Error(state.error || 'Could not recover this voice note.');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await fetch('/api/wa/voice/status?id='+encodeURIComponent(chatId)
+        +'&messageId='+encodeURIComponent(messageId));
+      state = await response.json();
+      if(!response.ok || state.error && state.status !== 'failed') {
+        throw new Error(state.error || 'Could not read transcription progress.');
+      }
+    }
+    throw new Error('Transcription is still running. Reopen this chat to check it.');
+  }
+
+  function voiceProgressLabel(state){
+    const stage = String(state.stage || state.status || 'recovering');
+    const elapsed = durationClock(state.elapsedSeconds || 0);
+    const duration = durationClock(state.durationSeconds || 0);
+    const estimate = voiceInitialEstimate(state);
+    if(stage === 'requesting-audio') return 'Requesting '+duration+' audio from WhatsApp · '+elapsed+' elapsed · '+estimate;
+    if(stage === 'downloading-audio') return 'Downloading '+duration+' audio · '+elapsed+' elapsed · '+estimate;
+    if(stage === 'loading-model') return 'Loading Whisper for '+duration+' audio · '+elapsed+' elapsed · '+estimate;
+    if(stage === 'transcribing'){
+      const processed = durationClock(state.processedSeconds || 0);
+      const percent = Math.max(0, Math.round(Number(state.percent) || 0));
+      const eta = voiceEta(state);
+      return percent > 0
+        ? 'Transcribing '+processed+' of '+duration+' · '+percent+'% · '+eta
+        : 'Starting transcription for '+duration+' audio · '+elapsed+' elapsed · '+estimate;
+    }
+    return 'Recovering '+duration+' voice note · '+elapsed+' elapsed · '+estimate;
+  }
+
+  function voiceProgressTitle(state){
+    const percent = Math.max(0, Math.round(Number(state.percent) || 0));
+    if(percent > 0) return percent+'% complete. '+voiceEta(state)+'.';
+    return 'Initial '+voiceInitialEstimate(state)+'. The live estimate appears once transcription advances.';
+  }
+
+  function voiceInitialEstimate(state){
+    const seconds = Number(state.durationSeconds) || 0;
+    if(!seconds) return 'estimating time';
+    const low = Math.max(1, Math.ceil(seconds / 600));
+    const high = Math.max(low + 1, Math.ceil(seconds / 180));
+    return 'estimate '+low+' to '+high+' min';
+  }
+
+  function voiceEta(state){
+    const percent = Number(state.percent) || 0;
+    const elapsed = Number(state.elapsedSeconds) || 0;
+    if(percent < 1 || elapsed < 1) return voiceProgressTitle({...state, percent:0});
+    const remaining = Math.max(0, Math.round(elapsed * (100 - percent) / percent));
+    return 'about '+durationClock(remaining)+' left';
+  }
+
+  function durationClock(value){
+    const total = Math.max(0, Math.round(Number(value) || 0));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    return hours
+      ? hours+':'+String(minutes).padStart(2,'0')+':'+String(seconds).padStart(2,'0')
+      : minutes+':'+String(seconds).padStart(2,'0');
   }
 
   function backToChats(){
