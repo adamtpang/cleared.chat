@@ -332,6 +332,11 @@
   .chip:focus-visible{outline:2px solid var(--brand-light);outline-offset:1px}
   .mmsgs{flex:1;overflow:auto;padding:14px 18px;display:flex;flex-direction:column;gap:11px}
   .mmsgs .msg{max-width:92%}
+  .reply-review{padding:var(--space-5x);display:grid;gap:var(--space-3x)}
+  .reply-review .target{font-size:12px;color:var(--muted-foreground)}
+  .reply-review textarea{width:100%;min-height:150px;max-height:45vh;resize:vertical;border:1px solid var(--line-2);border-radius:var(--r-md);background:var(--surface-2);color:var(--ink);font:14px/1.5 var(--font);padding:var(--space-3x);outline:none}
+  .reply-review textarea:focus{border-color:var(--ring);box-shadow:0 0 0 3px color-mix(in oklch,var(--ring) 25%,transparent)}
+  .reply-review .actions{display:flex;justify-content:flex-end;gap:var(--space-2x)}
 
   /* shadcn semantic tokens are declared at the top of the stylesheet. */
 
@@ -642,8 +647,8 @@
                 oninput="growComposer(this)"></textarea>
       <div class="cbtns">
         <button class="aibtn" id="aidraftbtn" onclick="aiDraft()" title="Draft this reply with AI">Draft with AI</button>
-        <button class="btn" id="copycomposer" onclick="copyComposer(this)">Review &amp; copy</button>
-        <span class="send-safety">Send manually in WhatsApp</span>
+        <button class="btn" id="copycomposer" onclick="copyComposer(this)">Review reply</button>
+        <span class="send-safety">You press Send in WhatsApp</span>
       </div>
     </div>
 
@@ -668,6 +673,23 @@
 <div id="summary" hidden></div>
 <div id="snap" hidden></div>
 <div id="paneLabel" hidden></div>
+
+<!-- One confirmation before handing the exact reply to WhatsApp. Nothing sends here. -->
+<div class="modal" id="handoffmodal" onclick="if(event.target===this)closeReplyHandoff()">
+  <div class="sheet" style="max-width:560px;height:auto;max-height:86vh">
+    <div class="mhead"><span class="mwho">Review reply</span>
+      <button class="x" onclick="closeReplyHandoff()" title="close">&times;</button></div>
+    <div class="reply-review">
+      <div class="target" id="handofftarget"></div>
+      <textarea id="handofftext" aria-label="Reply text"></textarea>
+      <div class="hint2">Confirm once to copy this text and open WhatsApp. You still press Send there.</div>
+      <div class="actions">
+        <button class="act" onclick="closeReplyHandoff()">Cancel</button>
+        <button class="btn" onclick="confirmReplyHandoff()">Copy and open WhatsApp</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- settings -->
 <div class="modal" id="setmodal" onclick="if(event.target===this)closeSettings()">
@@ -1136,7 +1158,7 @@
           '<textarea class="dedit" placeholder="Draft reply. Edit, then copy." oninput="autoGrow(this)">'+esc(draft)+'</textarea>'
           + '<div class="dacts">'
           +   '<button class="act primary" onclick="draftFor(\''+it.chatId+'\')">Write with AI</button>'
-          +   '<button class="act" onclick="copyDraft(\''+it.chatId+'\',this)">Review &amp; copy</button>'
+          +   '<button class="act" onclick="copyDraft(\''+it.chatId+'\',this)">Review reply</button>'
           +   '<button class="act" onclick="tweakDraft(\''+it.chatId+'\',\'shorter\',this)">Shorter</button>'
           +   '<button class="act" onclick="markSolved('+jsq(it.chatId)+',this)">Already solved</button>'
           + '</div>')
@@ -1190,25 +1212,52 @@
     list.innerHTML = html;
   }
 
-  const copyTimers = new WeakMap();
-  function confirmedCopy(btn, text){
-    if(btn.dataset.copyArmed !== '1'){
-      btn.dataset.copyArmed = '1';
-      btn.textContent = 'Confirm copy';
-      clearTimeout(copyTimers.get(btn));
-      copyTimers.set(btn, setTimeout(() => {
-        delete btn.dataset.copyArmed;
-        btn.textContent = 'Review & copy';
-      }, 5000));
-      return false;
+  let pendingHandoff = null;
+  function confirmedCopy(btn, text, chatId){
+    const id = chatId || openId || '';
+    const source = ALL.find((item) => item.id === id);
+    const priority = window.__items[id];
+    pendingHandoff = { btn, chatId:id, originalLabel:btn.textContent || 'Review reply' };
+    $('#handofftarget').textContent = 'To ' + (source?.who || priority?.who || 'this conversation');
+    $('#handofftext').value = noEm(text);
+    $('#handoffmodal').classList.add('on');
+    setTimeout(() => $('#handofftext').focus(), 0);
+    return false;
+  }
+
+  function closeReplyHandoff(){
+    $('#handoffmodal').classList.remove('on');
+    pendingHandoff = null;
+  }
+
+  function whatsAppDraftUrl(chatId, text){
+    const jid = String(chatId || '').replace(/^wa:/, '');
+    if(jid.endsWith('@s.whatsapp.net')){
+      const phone = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
+      if(phone) return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
     }
-    clearTimeout(copyTimers.get(btn));
-    delete btn.dataset.copyArmed;
-    if(navigator.clipboard) navigator.clipboard.writeText(text);
-    btn.classList.add('done');
-    btn.textContent = 'Copied';
-    setTimeout(()=>{ btn.classList.remove('done'); btn.textContent = 'Review & copy'; }, 1400);
-    return true;
+    return 'https://web.whatsapp.com/';
+  }
+
+  function confirmReplyHandoff(){
+    if(!pendingHandoff) return;
+    const handoff = pendingHandoff;
+    const text = noEm($('#handofftext').value.trim());
+    if(!text) return;
+    $('#handofftext').value = text;
+    if(navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+    else { $('#handofftext').select(); document.execCommand('copy'); }
+    $('#handoffmodal').classList.remove('on');
+    pendingHandoff = null;
+    if(handoff.btn){
+      handoff.btn.classList.add('done');
+      handoff.btn.textContent = 'Copied';
+      setTimeout(() => {
+        handoff.btn.classList.remove('done');
+        handoff.btn.textContent = handoff.originalLabel;
+      }, 1400);
+    }
+    window.open(whatsAppDraftUrl(handoff.chatId, text), '_blank', 'noopener');
   }
 
   function copyDraft(chatId, btn){
@@ -1217,7 +1266,7 @@
     const text = noEm((ta && ta.value) || it.draft || '');
     if (!text) return;
     if (ta) { ta.value = text; it.draft = text; }
-    confirmedCopy(btn, text);
+    confirmedCopy(btn, text, chatId);
   }
 
   // ---------- settings, theme, composer ----------
@@ -1653,7 +1702,7 @@
     if(!text) return;
     const clean = noEm(text);
     setComposer(clean);
-    confirmedCopy(btn, clean);
+    confirmedCopy(btn, clean, openId);
   }
 
   // ---------- rolodex (sidebar search + open a conversation) ----------
@@ -2323,7 +2372,11 @@
     loadThreadMeta(chatId);
   }
   function closeThread(){ $('#modal').classList.remove('on'); }
-  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeThread(); });
+  document.addEventListener('keydown', (e)=>{
+    if(e.key !== 'Escape') return;
+    closeReplyHandoff();
+    closeThread();
+  });
 
   async function loadThreadMeta(chatId){
     try{
