@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `b7ae133`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `5f6576a`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -96,12 +96,23 @@ linked phone and transcribes the recovered audio locally. Never inspect or log
 private audio or transcript text while testing this path.
 
 Voice-note recovery returns immediately and continues in the background. The
-retry control polls a metadata-only status endpoint and shows the current stage,
-elapsed time, an initial duration-based estimate, transcription percentage, and
-live remaining-time estimate. For a 13:46 note, the initial visible estimate is
-2 to 5 minutes. Recovery can wait up to 10 minutes for WhatsApp to return expired
-media before it reports a specific failure. The status endpoint never returns
-audio or transcript text.
+retry control polls a metadata-only status endpoint and shows a four-step
+diagnostic timeline: WhatsApp connection and media request, audio download,
+Whisper preparation, then transcription. It includes elapsed time, source state,
+file size, worker heartbeat, percentage, live ETA, and the exact fail-fast
+countdown. WhatsApp media recovery retries once after 30 seconds and fails with
+specific advice after 90 seconds. A Whisper worker that stops reporting progress
+also fails after 90 seconds. The failure reason stays visible inside the retry
+control. The status endpoint never returns audio or transcript text.
+
+The cloud gateway also contains a credential-gated WhatsApp Business Platform
+transcript bot at `/api/meta/whatsapp/webhook`. This is a separate Cleared
+business identity, not Adam's personal WhatsApp connection. It validates Meta
+signatures, accepts inbound audio, acknowledges the user, downloads the media,
+transcribes it locally, and replies from the service number with transcript
+chunks. It is disabled until all `META_WA_*` credentials are installed. Tests
+must use injected fake HTTP and transcription functions and never contact a real
+recipient. Setup is documented in `docs/whatsapp-transcript-bot.md`.
 
 Baileys history snapshots use absolute unread counts, while live
 `chats.update` events use `-1` for mark unread, `0` for read, and positive
