@@ -6,6 +6,46 @@ import { tmpdir } from 'node:os';
 import { once } from 'node:events';
 import { createGateway } from './gateway.mjs';
 
+test('serves the public Meta WhatsApp webhook without an app session', async (t) => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'cleared-meta-webhook-'));
+  const received = [];
+  const bot = {
+    configured: true,
+    verifySubscription(url) {
+      return url.searchParams.get('hub.verify_token') === 'verify'
+        ? { status: 200, body: url.searchParams.get('hub.challenge') }
+        : { status: 403, body: 'Webhook verification failed.' };
+    },
+    acceptWebhook(rawBody, signature) {
+      received.push({ body: rawBody.toString('utf8'), signature });
+      return { accepted: 1 };
+    },
+  };
+  const workers = { async get() { throw new Error('worker should not start'); }, stopAll() {} };
+  const gateway = createGateway({ dataDir, production: false, workerManager: workers, whatsappTranscriptBot: bot });
+  gateway.server.listen(0, '127.0.0.1');
+  await once(gateway.server, 'listening');
+  const base = `http://127.0.0.1:${gateway.server.address().port}`;
+  t.after(async () => {
+    gateway.server.close();
+    await once(gateway.server, 'close');
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  const verification = await fetch(`${base}/api/meta/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=verify&hub.challenge=challenge-123`);
+  assert.equal(verification.status, 200);
+  assert.equal(await verification.text(), 'challenge-123');
+
+  const callback = await fetch(`${base}/api/meta/whatsapp/webhook`, {
+    method: 'POST',
+    headers: { 'x-hub-signature-256': 'sha256=test', 'content-type': 'application/json' },
+    body: '{"object":"whatsapp_business_account"}',
+  });
+  assert.equal(callback.status, 200);
+  assert.deepEqual(await callback.json(), { received: true, accepted: 1 });
+  assert.deepEqual(received, [{ body: '{"object":"whatsapp_business_account"}', signature: 'sha256=test' }]);
+});
+
 test('signup creates a browser session and opens the private app', async (t) => {
   const dataDir = mkdtempSync(join(tmpdir(), 'cleared-gateway-'));
   const workers = {

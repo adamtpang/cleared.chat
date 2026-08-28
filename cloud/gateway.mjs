@@ -8,6 +8,7 @@ import { createClerkClient } from '@clerk/backend';
 import { AccountStore } from './auth-store.mjs';
 import { WorkerManager } from './worker-manager.mjs';
 import { accountPage, authPage, clerkAuthPage } from './pages.mjs';
+import { createWhatsAppTranscriptBot } from './whatsapp-transcript-bot.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(DIR, '..');
@@ -226,6 +227,7 @@ export function createGateway(options = {}) {
     process.env.CLERK_AUTHORIZED_PARTIES || process.env.APP_ORIGIN || (production ? 'https://app.cleared.chat' : 'http://127.0.0.1'),
   ).split(',').map((value) => value.trim()).filter(Boolean);
   const clerkAuthDebug = options.clerkAuthDebug ?? process.env.CLERK_AUTH_DEBUG === '1';
+  const whatsappTranscriptBot = options.whatsappTranscriptBot || createWhatsAppTranscriptBot({ dataDir });
 
   const authenticateClerk = async (req) => {
     const state = await clerk.authenticateRequest(webRequest(req), {
@@ -259,7 +261,20 @@ export function createGateway(options = {}) {
       const url = new URL(req.url, requestOrigin(req));
 
       if (req.method === 'GET' && url.pathname === '/health') {
-        return send(res, 200, JSON.stringify({ ok: true, auth: clerkConfigured ? 'clerk' : 'local' }), 'application/json; charset=utf-8');
+        return send(res, 200, JSON.stringify({
+          ok: true,
+          auth: clerkConfigured ? 'clerk' : 'local',
+          whatsappTranscriptBot: whatsappTranscriptBot.configured ? 'ready' : 'disabled',
+        }), 'application/json; charset=utf-8');
+      }
+      if (url.pathname === '/api/meta/whatsapp/webhook' && req.method === 'GET') {
+        const verification = whatsappTranscriptBot.verifySubscription(url);
+        return send(res, verification.status, verification.body, 'text/plain; charset=utf-8');
+      }
+      if (url.pathname === '/api/meta/whatsapp/webhook' && req.method === 'POST') {
+        const rawBody = await readBody(req, 1024 * 1024);
+        const result = whatsappTranscriptBot.acceptWebhook(rawBody, req.headers['x-hub-signature-256']);
+        return send(res, 200, JSON.stringify({ received: true, accepted: result.accepted }), 'application/json; charset=utf-8');
       }
       if (req.method === 'GET' && url.pathname === '/icon.svg' && existsSync(ICON)) {
         return send(res, 200, readFileSync(ICON), 'image/svg+xml', { 'Cache-Control': 'public, max-age=86400' });

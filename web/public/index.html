@@ -189,7 +189,7 @@
   .voice-note-label{display:flex;align-items:center;gap:7px;margin-bottom:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)}
   .voice-note-label::before{content:"";width:8px;height:8px;border:2px solid currentColor;border-radius:var(--r-full);box-shadow:3px 0 0 -1px currentColor}
   .voice-note-text{white-space:pre-wrap}
-  .voice-retry{max-width:100%;margin-top:7px;border:1px solid currentColor;border-radius:var(--r-sm);background:transparent;color:inherit;font:600 11px/1.35 var(--font);padding:7px 9px;cursor:pointer;text-align:left;white-space:normal}
+  .voice-retry{max-width:100%;margin-top:7px;border:1px solid currentColor;border-radius:var(--r-sm);background:transparent;color:inherit;font:600 11px/1.45 var(--font);padding:8px 10px;cursor:pointer;text-align:left;white-space:pre-line}
   .voice-retry:disabled{opacity:.55;cursor:default}
   /* shrink-to-ellipsis rather than flex:none - a Gmail label carries the
      account address, which is long enough to push the row off-screen */
@@ -1980,10 +1980,11 @@
       if(!response.ok || data.error) throw new Error(data.error || 'Could not recover this voice note.');
       await watchVoiceTranscript(chatId, messageId, button, data);
     }catch(error){
+      const message = String(error.message || error).slice(0, 220);
       button.disabled = false;
-      button.textContent = 'Retry transcript';
-      button.title = String(error.message || error);
-      $('#err').innerHTML = '<div class="err">'+esc(String(error.message || error))+'</div>';
+      button.textContent = 'Recovery stopped\n'+message+'\nClick to retry';
+      button.title = message;
+      $('#err').innerHTML = '<div class="err">'+esc(message)+'</div>';
     }
   }
 
@@ -2014,19 +2015,27 @@
     const stage = String(state.stage || state.status || 'recovering');
     const elapsed = durationClock(state.elapsedSeconds || 0);
     const duration = durationClock(state.durationSeconds || 0);
-    const estimate = voiceInitialEstimate(state);
-    if(stage === 'requesting-audio') return 'Requesting '+duration+' audio from WhatsApp · '+elapsed+' elapsed · '+estimate;
-    if(stage === 'downloading-audio') return 'Downloading '+duration+' audio · '+elapsed+' elapsed · '+estimate;
-    if(stage === 'loading-model') return 'Loading Whisper for '+duration+' audio · '+elapsed+' elapsed · '+estimate;
+    const heartbeat = Math.max(0, Math.round(Number(state.updatedAgoSeconds) || 0));
+    const connected = state.sourceConnected ? 'WhatsApp connected' : 'WhatsApp '+String(state.sourceStatus || 'not connected');
+    const failureClock = state.secondsUntilFailure !== null && state.secondsUntilFailure !== undefined
+      && Number.isFinite(Number(state.secondsUntilFailure))
+      ? Math.max(0, Math.round(Number(state.secondsUntilFailure)))+'s until fail-fast check'
+      : '';
+    if(stage === 'checking-connection') return 'Step 1 of 4: Check WhatsApp connection\n'+connected+' · '+elapsed+' elapsed\nA connection failure appears immediately.';
+    if(stage === 'requesting-audio') return 'Step 1 of 4: Request original audio\n'+connected+' · request in progress · '+elapsed+' elapsed\nIf WhatsApp rejects it, this stops immediately.';
+    if(['waiting-for-audio','retrying-audio-request'].includes(stage)) return 'Step 1 of 4: Recover original audio\n'+connected+' · '+elapsed+' elapsed · '+failureClock+'\n'+(state.detail || 'Waiting for the linked phone to return the audio.');
+    if(stage === 'downloading-audio') return 'Step 2 of 4: Download audio\n'+duration+' voice note · '+elapsed+' elapsed\nAudio was found. Downloading and checking it now.';
+    if(stage === 'audio-received' || stage === 'checking-audio') return 'Step 2 of 4: Audio received\n'+duration+' · '+fileSizeLabel(state.audioBytes)+' · heartbeat '+heartbeat+'s ago\nThe file exists and passed into the local transcription worker.';
+    if(['loading-model','model-ready'].includes(stage)) return 'Step 3 of 4: Prepare transcription engine\nWhisper '+(stage === 'model-ready' ? 'is ready' : 'is loading')+' · heartbeat '+heartbeat+'s ago · '+failureClock+'\nA stalled worker fails after 90 seconds without progress.';
     if(stage === 'transcribing'){
       const processed = durationClock(state.processedSeconds || 0);
       const percent = Math.max(0, Math.round(Number(state.percent) || 0));
       const eta = voiceEta(state);
       return percent > 0
-        ? 'Transcribing '+processed+' of '+duration+' · '+percent+'% · '+eta
-        : 'Starting transcription for '+duration+' audio · '+elapsed+' elapsed · '+estimate;
+        ? 'Step 4 of 4: Transcribing\n'+processed+' of '+duration+' · '+percent+'% · '+eta+'\nWorker heartbeat '+heartbeat+'s ago. It fails after 90s without progress.'
+        : 'Step 4 of 4: Start transcription\n'+duration+' voice note · '+elapsed+' elapsed · heartbeat '+heartbeat+'s ago\nA stalled worker fails after 90 seconds without progress.';
     }
-    return 'Recovering '+duration+' voice note · '+elapsed+' elapsed · '+estimate;
+    return 'Recovering '+duration+' voice note\n'+elapsed+' elapsed · heartbeat '+heartbeat+'s ago\n'+(state.detail || 'Checking the next recovery step.');
   }
 
   function voiceProgressTitle(state){
@@ -2045,10 +2054,17 @@
 
   function voiceEta(state){
     const percent = Number(state.percent) || 0;
-    const elapsed = Number(state.elapsedSeconds) || 0;
+    const elapsed = Number(state.stageElapsedSeconds) || 0;
     if(percent < 1 || elapsed < 1) return voiceProgressTitle({...state, percent:0});
     const remaining = Math.max(0, Math.round(elapsed * (100 - percent) / percent));
     return 'about '+durationClock(remaining)+' left';
+  }
+
+  function fileSizeLabel(value){
+    const bytes = Math.max(0, Number(value) || 0);
+    if(!bytes) return 'checking file size';
+    if(bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1)+' MB';
+    return Math.max(1, Math.round(bytes / 1024))+' KB';
   }
 
   function durationClock(value){

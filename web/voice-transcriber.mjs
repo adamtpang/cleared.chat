@@ -9,7 +9,7 @@ const ENABLED = process.env.VOICE_TRANSCRIPTION !== '0';
 const PYTHON = process.env.WHISPER_PYTHON || 'python';
 const MODEL = process.env.WHISPER_MODEL || 'small';
 const DATA_DIR = () => process.env.WA_DATA_DIR || DIR;
-const AUDIO_DIR = () => join(DATA_DIR(), 'voice-note-cache');
+const AUDIO_DIR = (dataDir = DATA_DIR()) => join(dataDir, 'voice-note-cache');
 
 let worker = null;
 let workerError = '';
@@ -55,6 +55,7 @@ function startWorker() {
         percent: Number(result.progress) || 0,
         processedSeconds: Number(result.processedSeconds) || 0,
         durationSeconds: Number(result.durationSeconds) || 0,
+        audioBytes: Number(result.audioBytes) || 0,
       });
       return;
     }
@@ -91,10 +92,11 @@ export function transcriptionStatus() {
 
 export async function transcribeVoiceBuffer(buffer, options = {}) {
   if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error('voice note audio is empty');
-  mkdirSync(AUDIO_DIR(), { recursive: true });
+  const audioDir = AUDIO_DIR(options.dataDir);
+  mkdirSync(audioDir, { recursive: true });
   const safeId = String(options.id || `voice-${Date.now()}`).replace(/[^a-z0-9_-]+/gi, '-');
   const extension = extensionFor(options.mimetype);
-  const path = join(AUDIO_DIR(), `${safeId}${extension}`);
+  const path = join(audioDir, `${safeId}${extension}`);
   writeFileSync(path, buffer);
 
   try {
@@ -102,15 +104,33 @@ export async function transcribeVoiceBuffer(buffer, options = {}) {
     const result = await new Promise((resolve, reject) => {
       options.onProgress?.({ stage: 'loading-model', percent: 0, processedSeconds: 0, durationSeconds: 0 });
       const active = startWorker();
-      const timeout = setTimeout(() => {
+      let stallTimeout = null;
+      const totalTimeout = setTimeout(() => {
         pending.delete(id);
+        if (stallTimeout) clearTimeout(stallTimeout);
         reject(new Error('voice-note transcription timed out'));
       }, Number(process.env.WHISPER_TIMEOUT_MS || 10 * 60_000));
+      const cleanup = () => {
+        clearTimeout(totalTimeout);
+        if (stallTimeout) clearTimeout(stallTimeout);
+      };
+      const resetStallTimeout = () => {
+        if (stallTimeout) clearTimeout(stallTimeout);
+        stallTimeout = setTimeout(() => {
+          pending.delete(id);
+          cleanup();
+          reject(new Error('transcription worker stopped reporting progress for 90 seconds'));
+        }, Number(process.env.WHISPER_STALL_TIMEOUT_MS || 90_000));
+      };
       pending.set(id, {
-        onProgress: options.onProgress,
-        resolve: (value) => { clearTimeout(timeout); resolve(value); },
-        reject: (error) => { clearTimeout(timeout); reject(error); },
+        onProgress: (progress) => {
+          resetStallTimeout();
+          options.onProgress?.(progress);
+        },
+        resolve: (value) => { cleanup(); resolve(value); },
+        reject: (error) => { cleanup(); reject(error); },
       });
+      resetStallTimeout();
       active.stdin.write(`${JSON.stringify({ id, path, model: MODEL })}\n`);
     });
     return {

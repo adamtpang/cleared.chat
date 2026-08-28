@@ -6,6 +6,7 @@ voice note.
 """
 
 import json
+import os
 import sys
 
 from faster_whisper import WhisperModel
@@ -22,10 +23,29 @@ for line in sys.stdin:
         request = json.loads(line)
         request_id = request["id"]
         model_name = request.get("model") or "small"
+        audio_bytes = os.path.getsize(request["path"])
+        emit({
+            "id": request_id,
+            "stage": "checking-audio",
+            "progress": 0,
+            "audioBytes": audio_bytes,
+        })
         model = models.get(model_name)
         if model is None:
+            emit({
+                "id": request_id,
+                "stage": "loading-model",
+                "progress": 0,
+                "audioBytes": audio_bytes,
+            })
             model = WhisperModel(model_name, device="cpu", compute_type="int8")
             models[model_name] = model
+        emit({
+            "id": request_id,
+            "stage": "model-ready",
+            "progress": 0,
+            "audioBytes": audio_bytes,
+        })
 
         segments, info = model.transcribe(
             request["path"],

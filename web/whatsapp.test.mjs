@@ -13,6 +13,7 @@ import {
   toWhatsAppSourceId,
   validateOutboundText,
   validateVoiceRetryRequest,
+  voiceProgressSnapshot,
   whatsappJid,
 } from './whatsapp.mjs';
 
@@ -63,6 +64,32 @@ test('voice retry accepts only a synced WhatsApp message identity', () => {
     chatId: 'gmail:thread-1',
     messageId: '3EB0123456789ABCDE',
   }), /WhatsApp conversation/);
+});
+
+test('voice recovery status exposes diagnostics without transcript content', () => {
+  const now = Date.parse('2026-08-28T12:01:00.000Z');
+  const status = voiceProgressSnapshot({
+    seconds: 826,
+    transcript: 'private words must never appear here',
+    transcriptionStatus: 'recovering',
+    transcriptionStartedAt: '2026-08-28T12:00:00.000Z',
+    transcriptionProgress: {
+      stage: 'waiting-for-audio',
+      startedAt: '2026-08-28T12:00:00.000Z',
+      stageStartedAt: '2026-08-28T12:00:05.000Z',
+      updatedAt: '2026-08-28T12:00:30.000Z',
+      failureDeadlineAt: '2026-08-28T12:01:35.000Z',
+      detail: 'Waiting for WhatsApp.',
+      milestones: [{ stage: 'requesting-audio', at: '2026-08-28T12:00:04.000Z' }],
+    },
+  }, { now, sourceStatus: 'open' });
+  assert.equal(status.durationSeconds, 826);
+  assert.equal(status.elapsedSeconds, 60);
+  assert.equal(status.stageElapsedSeconds, 55);
+  assert.equal(status.updatedAgoSeconds, 30);
+  assert.equal(status.secondsUntilFailure, 35);
+  assert.equal(status.sourceConnected, true);
+  assert.equal(JSON.stringify(status).includes('private words'), false);
 });
 
 test('WhatsApp chat updates preserve archive and inbox state', () => {
