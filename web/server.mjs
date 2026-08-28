@@ -852,9 +852,11 @@ async function getRankedInbox({ scope = 'all' } = {}) {
     // The model (or heuristic) proposes, the calibration rules dispose.
     progress.stage = 'calibrating fates';
     const byId = new Map(chats.map((c) => [c.id, c]));
-    const items = proposed.map((it) => {
+    let items = proposed.map((it) => {
       const conv = byId.get(it.chatId);
       if (!conv) return { ...it, fate: it.fate || FATE.UNCLEAR };
+      const latest = (conv.messages || []).at(-1);
+      const conversationVersion = String(latest?.timestamp || conv.lastActivity || latest?.key || '');
       const { fate, reason, overridden, state } = assignFate(conv, it.fate, now);
       const days = state.daysSinceLast || 0;
       const ageBoost = Math.min(Math.floor(days / 7), 8);
@@ -889,10 +891,13 @@ async function getRankedInbox({ scope = 'all' } = {}) {
         clarifyingQuestion,
         nextAction,
         avatarUrl: avatarUrlFor(conv),
+        conversationVersion,
         // Only a conversation where they spoke last may carry a send-ready draft.
         draft: replyOwed && !needsClarification ? (it.draft || '') : '',
       };
     });
+    const solvedChats = readSolvedChats();
+    items = items.filter((item) => !solvedMatches(item, solvedChats));
     const draftNote = await repairMissingDrafts(items, chats);
     if (draftNote) llmNote = [llmNote, draftNote].filter(Boolean).join(' ');
     items.sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -908,15 +913,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
       if (it.task) it.task = stripEm(it.task);
       if (it.clarifyingQuestion) it.clarifyingQuestion = stripEm(it.clarifyingQuestion);
     }
-    // 80/20 cut: action queue (block + quick), sorted; top 20% of that queue is "do first"
-    const action = items.filter((i) => i.fate === FATE.BLOCK || i.fate === FATE.QUICK);
-    const topN = Math.max(1, Math.ceil(action.length * 0.2));
-    const eightyTwenty = {
-      actionCount: action.length,
-      topCount: Math.min(topN, action.length),
-      topIds: action.slice(0, topN).map((i) => i.chatId),
-      topNames: action.slice(0, topN).map((i) => i.who),
-    };
+    const eightyTwenty = buildEightyTwenty(items);
     progress.stage = 'saving snapshot';
     const result = {
       demo: false, scope, llm: llmUsed, note: llmNote || undefined, items, eightyTwenty,
@@ -967,6 +964,48 @@ async function exportChatMarkdown(chatId, who) {
 }
 
 const INBOX_CACHE_FILE = () => join(SNAPSHOT_DIR, 'inbox-latest.json');
+const SOLVED_CHATS_FILE = () => join(SNAPSHOT_DIR, 'solved-chats.json');
+
+function readSolvedChats() {
+  try { return JSON.parse(readFileSync(SOLVED_CHATS_FILE(), 'utf8')); }
+  catch { return {}; }
+}
+
+function solvedMatches(item, solved = readSolvedChats()) {
+  const record = solved?.[item?.chatId];
+  return Boolean(record && String(record.conversationVersion || '') === String(item?.conversationVersion || ''));
+}
+
+function buildEightyTwenty(items) {
+  const action = items.filter((item) => item.fate === FATE.BLOCK || item.fate === FATE.QUICK);
+  const topN = action.length ? Math.max(1, Math.ceil(action.length * 0.2)) : 0;
+  return {
+    actionCount: action.length,
+    topCount: Math.min(topN, action.length),
+    topIds: action.slice(0, topN).map((item) => item.chatId),
+    topNames: action.slice(0, topN).map((item) => item.who),
+  };
+}
+
+function markChatSolved(chatId, conversationVersion) {
+  const id = String(chatId || '').trim();
+  const version = String(conversationVersion || '').trim();
+  if (!id || !version) throw new Error('missing chat version');
+  const solved = readSolvedChats();
+  solved[id] = { conversationVersion: version, solvedAt: new Date().toISOString() };
+  mkdirSync(SNAPSHOT_DIR, { recursive: true });
+  writeFileSync(SOLVED_CHATS_FILE(), JSON.stringify(solved, null, 2));
+
+  try {
+    const file = INBOX_CACHE_FILE();
+    const cached = JSON.parse(readFileSync(file, 'utf8'));
+    cached.items = (cached.items || []).filter((item) => !solvedMatches(item, solved));
+    cached.eightyTwenty = buildEightyTwenty(cached.items);
+    writeFileSync(file, JSON.stringify(cached));
+  } catch { /* the next triage run will apply solved state */ }
+
+  return { ok: true, chatId: id, conversationVersion: version };
+}
 
 // The complete list, BEFORE any judgement: every chat and every email thread
 // from every connected source, newest first, with zero LLM in the path. This
@@ -1454,7 +1493,7 @@ async function act() {
 // --- HTTP ---
 function send(res, code, body, type = 'application/json') {
   res.writeHead(code, { 'Content-Type': type });
-  res.end(typeof body === 'string' ? body : JSON.stringify(body));
+  res.end(Buffer.isBuffer(body) || typeof body === 'string' ? body : JSON.stringify(body));
 }
 async function readBody(req) { let b = ''; for await (const c of req) b += c; return JSON.parse(b || '{}'); }
 
@@ -1531,6 +1570,12 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
 
+    if (req.method === 'GET' && url.pathname === '/favicon.ico') {
+      const file = join(DIR, 'public', 'favicon.ico');
+      if (!existsSync(file)) return send(res, 404, 'not found', 'text/plain');
+      return send(res, 200, readFileSync(file), 'image/x-icon');
+    }
+
     // license gate: everything below this line requires activation once
     // LICENSE_SECRET is set. Activation route itself must stay reachable.
     if (req.method === 'POST' && url.pathname === '/api/license/activate') {
@@ -1565,6 +1610,11 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       if (!body.id) return send(res, 400, { error: 'missing id' });
       return send(res, 200, setWhatsAppContactAlias(body.id, body.name));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/solved') {
+      const body = await readBody(req);
+      if (!body.chatId || !body.conversationVersion) return send(res, 400, { error: 'missing chat version' });
+      return send(res, 200, markChatSolved(body.chatId, body.conversationVersion));
     }
     if (req.method === 'GET' && url.pathname === '/api/inbox/latest') {
       const f = INBOX_CACHE_FILE();

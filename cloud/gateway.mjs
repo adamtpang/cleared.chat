@@ -13,6 +13,7 @@ const DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(DIR, '..');
 const WEB_APP = join(ROOT, 'web', 'public', 'index.html');
 const ICON = join(ROOT, 'icon.svg');
+const FAVICON = join(ROOT, 'favicon.ico');
 const COOKIE = 'cleared_session';
 const authAttempts = new Map();
 
@@ -262,6 +263,9 @@ export function createGateway(options = {}) {
       }
       if (req.method === 'GET' && url.pathname === '/icon.svg' && existsSync(ICON)) {
         return send(res, 200, readFileSync(ICON), 'image/svg+xml', { 'Cache-Control': 'public, max-age=86400' });
+      }
+      if (req.method === 'GET' && url.pathname === '/favicon.ico' && existsSync(FAVICON)) {
+        return send(res, 200, readFileSync(FAVICON), 'image/x-icon', { 'Cache-Control': 'public, max-age=86400' });
       }
 
       const sessionToken = parseCookies(req.headers.cookie)[COOKIE] || '';

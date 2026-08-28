@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>cleared.chat | daily triage</title>
+<link rel="icon" href="/favicon.ico" sizes="any" />
 <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <script>
@@ -108,6 +109,9 @@
   .cut8020 .rn{font-weight:800;color:var(--brand-light);min-width:1.6em;font-variant-numeric:tabular-nums}
   .cut8020 .rw{font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cut8020 .rs{font-size:12px;font-weight:700;color:var(--faint);font-variant-numeric:tabular-nums;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .solvebtn{border:1px solid var(--line-2);background:transparent;color:var(--muted-foreground);border-radius:var(--r-sm);padding:5px 8px;font:700 11px var(--font);cursor:pointer;white-space:nowrap}
+  .solvebtn:hover{border-color:var(--ok);color:var(--ok)}
+  .solvebtn:disabled{opacity:.5;cursor:default}
 
   /* foldable folders */
   .folder{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:10px;overflow:hidden}
@@ -895,6 +899,53 @@
     renderFates(Object.values(window.__items), window.__eightyTwenty);
   }
 
+  function currentTriageMeta(items){
+    const action = actionQueue(items);
+    const topCount = action.length ? Math.max(1, Math.ceil(action.length * 0.2)) : 0;
+    return {
+      actionCount: action.length,
+      topCount,
+      topIds: action.slice(0, topCount).map(item => item.chatId),
+      topNames: action.slice(0, topCount).map(item => item.who)
+    };
+  }
+
+  async function markSolved(chatId, btn){
+    const it = window.__items[chatId];
+    if(!it) return;
+    const source = ALL.find(item => item.id === chatId);
+    const conversationVersion = it.conversationVersion || (source && source.lastAt) || '';
+    if(!conversationVersion){
+      $('#err').innerHTML = '<div class="err">Reload the inbox once, then mark this chat solved.</div>';
+      return;
+    }
+    const old = btn ? btn.textContent : '';
+    if(btn){ btn.disabled = true; btn.textContent = 'Saving'; }
+    try{
+      const response = await fetch('/api/solved', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({chatId:it.chatId, conversationVersion})
+      });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Could not mark this chat solved');
+      delete window.__items[chatId];
+      LATEST_TRIAGE_ITEMS = LATEST_TRIAGE_ITEMS.filter(item => item.chatId !== chatId);
+      VOICE_QUEUE = VOICE_QUEUE.filter(item => item.chatId !== chatId);
+      if(openDetailId === chatId) openDetailId = null;
+      const remaining = Object.values(window.__items);
+      const meta = currentTriageMeta(remaining);
+      window.__eightyTwenty = meta;
+      LATEST_TRIAGE_META = meta;
+      $('#cntPriority').textContent = meta.actionCount;
+      renderFates(remaining, meta);
+      if(voiceActive) await showVoiceCurrent(false);
+    }catch(error){
+      if(btn){ btn.disabled = false; btn.textContent = old; }
+      $('#err').innerHTML = '<div class="err">'+esc(String(error.message||error))+'</div>';
+    }
+  }
+
   async function blockTime(chatId, btn){
     const it = window.__items[chatId]; if(!it) return;
     btn.disabled = true; const old = btn.textContent; btn.textContent = 'Scheduling…';
@@ -957,6 +1008,7 @@
           + '<span class="rn">#'+(i+1)+'</span>'
           + '<span class="rw">'+esc(it.who)+'</span>'
           + '<span class="rs">'+esc(String(it.score??''))+' · '+esc(fateName(it.fate))+'</span>'
+          + '<button class="solvebtn" onclick="event.stopPropagation();markSolved('+jsq(it.chatId)+',this)">Solved</button>'
           + '</li>').join('')
       + '</ol></div>';
   }
@@ -982,6 +1034,7 @@
       + '<div class="side">'
       +   '<span class="is'+(noise?' noise':'')+'">'+(it.score??'')+'</span>'
       +   '<span class="it fate '+fateClass(it.fate)+'">'+esc(fateName(it.fate))+'</span>'
+      +   (noise ? '' : '<button class="solvebtn" onclick="event.stopPropagation();markSolved('+jsq(it.chatId)+',this)">Solved</button>')
       + '</div>'
       + '</div>';
   }
@@ -1004,13 +1057,14 @@
       + (it.nextAction || it.nextStep ? '<div class="next"><b>Next action:</b> '+esc(noEm(it.nextAction || it.nextStep))+'</div>' : '')
       + (clarification ? '<div class="clarify"><b>Before drafting</b>'+esc(clarification)+'</div>' : '')
       + (noise ? '' : clarification
-        ? '<div class="dacts"><button class="act primary" onclick="clarifyFor(\''+it.chatId+'\')">Answer question</button></div>'
+        ? '<div class="dacts"><button class="act primary" onclick="clarifyFor(\''+it.chatId+'\')">Answer question</button><button class="act" onclick="markSolved('+jsq(it.chatId)+',this)">Already solved</button></div>'
         :
           '<textarea class="dedit" placeholder="Draft reply. Edit, then copy." oninput="autoGrow(this)">'+esc(draft)+'</textarea>'
           + '<div class="dacts">'
           +   '<button class="act primary" onclick="draftFor(\''+it.chatId+'\')">Write with AI</button>'
           +   '<button class="act" onclick="copyDraft(\''+it.chatId+'\',this)">Review &amp; copy</button>'
           +   '<button class="act" onclick="tweakDraft(\''+it.chatId+'\',\'shorter\',this)">Shorter</button>'
+          +   '<button class="act" onclick="markSolved('+jsq(it.chatId)+',this)">Already solved</button>'
           + '</div>')
       + '</div>';
   }

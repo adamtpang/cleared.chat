@@ -6,6 +6,7 @@
   "author": "Adam Pangelinan",
   "main": "main.js",
   "scripts": {
+    "favicon": "node scripts/make-favicon.mjs",
     "start": "electron .",
     "dist": "electron-builder --win nsis"
   },

@@ -11,6 +11,7 @@ const shell = (title, body) => `<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)} | cleared.chat</title>
 <meta name="theme-color" content="#087D86">
+<link rel="icon" href="/favicon.ico" sizes="any">
 <style>
 :root{--bg:#f4f9f9;--panel:#fff;--ink:#152124;--muted:#53696d;--line:#d3e1e2;--brand:#087d86;--danger:#b42318;--radius:8px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}

@@ -18,6 +18,7 @@ RUN python3 -m venv /opt/cleared-voice \
 COPY web ./web
 COPY cloud ./cloud
 COPY icon.svg ./icon.svg
+COPY favicon.ico ./favicon.ico
 
 ENV NODE_ENV=production \
   CLOUD_DATA_DIR=/data \
