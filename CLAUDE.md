@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `51d32ba`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `c9efafa`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -53,6 +53,12 @@ cleared.chat state in `solved-chats.json`; it never archives, marks read, sends,
 or otherwise mutates WhatsApp. A solved conversation stays out of triage while
 its latest-message version is unchanged and returns automatically when a newer
 message arrives.
+
+Unread rows and the open conversation header expose a `Cleared` control backed
+by the same versioned private state. It removes the current conversation version
+from Unread and Priorities, decrements the visible queue, and advances to the
+next unread chat. The conversation remains under All and returns to the work
+queues after a newer message. It never changes WhatsApp read state.
 
 WhatsApp protocol, key-distribution, history-sync, and app-state events are
 control traffic. `web/whatsapp.mjs` drops them at ingestion and removes old
