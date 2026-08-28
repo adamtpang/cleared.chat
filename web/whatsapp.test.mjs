@@ -5,7 +5,9 @@ import {
   isWhatsAppChatId,
   isVisibleStoredMessage,
   messageTextForDisplay,
+  mergeUnreadUpdate,
   normalizeChatPatch,
+  normalizeChatUpdate,
   normalizeContactPatch,
   registerLidMappings,
   toWhatsAppSourceId,
@@ -42,6 +44,20 @@ test('WhatsApp chat updates preserve archive and inbox state', () => {
 
 test('an explicit WhatsApp unarchive update is not lost', () => {
   assert.deepEqual(normalizeChatPatch({ archived: false }), { isArchived: false });
+});
+
+test('WhatsApp live updates preserve mark-unread app state', () => {
+  assert.equal(mergeUnreadUpdate(0, -1), 1);
+  assert.equal(mergeUnreadUpdate(4, -1), 4);
+  assert.deepEqual(normalizeChatUpdate({ unreadCount: -1 }, 0), { unreadCount: 1 });
+});
+
+test('WhatsApp live unread deltas increment and read updates clear', () => {
+  assert.equal(mergeUnreadUpdate(3, 2), 5);
+  assert.equal(mergeUnreadUpdate(3, 0), 0);
+  assert.equal(mergeUnreadUpdate(3, null), 3);
+  assert.deepEqual(normalizeChatUpdate({ unreadCount: 2 }, 3), { unreadCount: 5 });
+  assert.deepEqual(normalizeChatUpdate({ unreadCount: 0 }, 3), { unreadCount: 0 });
 });
 
 test('WhatsApp contacts preserve saved names and usable profile photos', () => {

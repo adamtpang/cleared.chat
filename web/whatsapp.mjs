@@ -16,6 +16,7 @@ import {
   fetchLatestWaWebVersion,
   downloadMediaMessage,
   normalizeMessageContent,
+  ALL_WA_PATCH_NAMES,
 } from 'baileys';
 import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode-terminal';
@@ -127,6 +128,10 @@ let socketGeneration = 0;
 let waWebVersion = null;
 let registrationConfirmed = false;
 let sessionLoggedOut = false;
+let unreadSyncStatus = 'idle'; // idle | syncing | complete | error
+let unreadSyncDetail = 'Unread state has not been refreshed yet.';
+let lastUnreadSyncAt = null;
+let unreadSyncPromise = null;
 
 function cancelPendingReconnect() {
   if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -161,6 +166,7 @@ function setConnectionStatus(next, detail, { error = null, closeCode = null } = 
 export function getStatus() {
   const chats = [...chatsById.values()];
   const messages = [...messagesById.values()].flat();
+  const unreadChats = chats.filter((c) => c.lastActivity && !c.isArchived && Number(c.unreadCount) > 0);
   return {
     status,
     registered: registrationConfirmed || hasUsableCredentials(authState?.state?.creds),
@@ -178,10 +184,15 @@ export function getStatus() {
     historyStatus,
     historyProgress,
     lastHistorySyncAt,
+    unreadSyncStatus,
+    unreadSyncDetail,
+    lastUnreadSyncAt,
     counts: {
       total: chats.filter((c) => c.lastActivity).length,
       active: chats.filter((c) => c.lastActivity && !c.isArchived).length,
       archived: chats.filter((c) => c.lastActivity && c.isArchived).length,
+      unreadChats: unreadChats.length,
+      unreadMessages: unreadChats.reduce((sum, chat) => sum + Math.max(0, Number(chat.unreadCount) || 0), 0),
       voiceNotes: messages.filter((m) => m.kind === 'voice').length,
       voiceTranscribed: messages.filter((m) => m.kind === 'voice' && m.transcriptionStatus === 'complete').length,
       voicePending: messages.filter((m) => m.kind === 'voice' && m.transcriptionStatus === 'transcribing').length,
@@ -341,7 +352,13 @@ function scheduleSave() {
     try {
       mkdirSync(DATA_DIR(), { recursive: true });
       writeFileSync(STORE_FILE(), JSON.stringify({
-        meta: { historyStatus, historyProgress, lastHistorySyncAt, lidMappings: [...lidToPhone] },
+        meta: {
+          historyStatus,
+          historyProgress,
+          lastHistorySyncAt,
+          lastUnreadSyncAt,
+          lidMappings: [...lidToPhone],
+        },
         chats: [...chatsById.values()],
         messages: Object.fromEntries(messagesById),
       }));
@@ -364,6 +381,11 @@ function loadStore() {
     historyStatus = j.meta?.historyStatus || historyStatus;
     historyProgress = j.meta?.historyProgress ?? historyProgress;
     lastHistorySyncAt = j.meta?.lastHistorySyncAt || lastHistorySyncAt;
+    lastUnreadSyncAt = j.meta?.lastUnreadSyncAt || lastUnreadSyncAt;
+    if (lastUnreadSyncAt) {
+      unreadSyncStatus = 'complete';
+      unreadSyncDetail = 'Unread state was restored from the last WhatsApp sync.';
+    }
     registerLidMappings((j.meta?.lidMappings || []).map(([lid, pn]) => ({ lid, pn })));
     if (removedControlMessages) scheduleSave();
   } catch { /* non-fatal */ }
@@ -466,6 +488,28 @@ export function normalizeChatPatch(chat = {}) {
   return patch;
 }
 
+// Baileys chat snapshots contain an absolute unread count. Live
+// `chats.update` events use different semantics: -1 means mark unread, 0
+// means read, and a positive number is a delta from newly received messages.
+export function mergeUnreadUpdate(currentUnread = 0, incomingUnread) {
+  const current = Math.max(0, numeric(currentUnread) || 0);
+  if (incomingUnread === undefined || incomingUnread === null) return current;
+  const incoming = numeric(incomingUnread);
+  if (incoming === null) return current;
+  if (incoming < 0) return Math.max(1, current);
+  if (incoming === 0) return 0;
+  return current + incoming;
+}
+
+export function normalizeChatUpdate(chat = {}, currentUnread = 0) {
+  const patch = normalizeChatPatch(chat);
+  delete patch.unreadCount;
+  if (Object.prototype.hasOwnProperty.call(chat, 'unreadCount')) {
+    patch.unreadCount = mergeUnreadUpdate(currentUnread, chat.unreadCount);
+  }
+  return patch;
+}
+
 function contactName(contact = {}) {
   return [contact.name, contact.notify, contact.verifiedName, contact.username]
     .map((value) => String(value || '').trim())
@@ -505,6 +549,14 @@ function upsertChat(id, patch) {
     lastActivity: null,
   };
   chatsById.set(id, { ...prev, ...patch });
+}
+
+function applyChatUpdate(chat = {}) {
+  const raw = jidNormalizedUser(chat.id || '');
+  if (!raw) return;
+  const jid = canonicalWhatsAppJid(raw);
+  const currentUnread = chatsById.get(jid)?.unreadCount || 0;
+  upsertChat(jid, normalizeChatUpdate(chat, currentUnread));
 }
 
 function applyContact(contact = {}) {
@@ -666,6 +718,96 @@ export function applyUnreadReference(rows = []) {
   return { imported: rows.length, matched, missing };
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForOpenSocket(timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (sock && status === 'open') return sock;
+    if (status === 'error' || sessionLoggedOut) {
+      throw new Error(statusDetail || 'The saved WhatsApp link is not authorized.');
+    }
+    await wait(250);
+  }
+  throw new Error('WhatsApp did not finish reconnecting in time.');
+}
+
+// Rebuild unread state from WhatsApp's encrypted app-state snapshot. Clearing
+// the local app-state versions asks WhatsApp for a fresh snapshot, but does not
+// call chatModify or write read state back to the account.
+export function resyncUnreadState() {
+  if (unreadSyncPromise) return unreadSyncPromise;
+  unreadSyncPromise = runUnreadResync().finally(() => { unreadSyncPromise = null; });
+  return unreadSyncPromise;
+}
+
+async function runUnreadResync() {
+  if (!chatsById.size) loadStore();
+  unreadSyncStatus = 'syncing';
+  unreadSyncDetail = 'Requesting a fresh read-only unread snapshot from WhatsApp.';
+
+  try {
+    await ensureWhatsAppStarted();
+    const activeSocket = await waitForOpenSocket();
+    const keys = activeSocket.authState?.keys || authState?.state?.keys;
+    if (!keys) throw new Error('WhatsApp encryption state is unavailable.');
+
+    const names = [...ALL_WA_PATCH_NAMES];
+    const previousVersions = await keys.get('app-state-sync-version', names);
+    const previousUnread = new Map(
+      [...chatsById].map(([id, chat]) => [id, Math.max(0, Number(chat.unreadCount) || 0)]),
+    );
+
+    for (const chat of chatsById.values()) {
+      if (chat.lastActivity && !chat.isArchived) chat.unreadCount = 0;
+    }
+
+    try {
+      await keys.set({
+        'app-state-sync-version': Object.fromEntries(names.map((name) => [name, null])),
+      });
+      await activeSocket.resyncAppState(names, true);
+      // Baileys flushes the consolidated chat updates just after the resync
+      // promise resolves.
+      await wait(350);
+    } catch (error) {
+      await keys.set({
+        'app-state-sync-version': Object.fromEntries(
+          names.map((name) => [name, previousVersions?.[name] || null]),
+        ),
+      });
+      for (const [id, before] of previousUnread) {
+        const chat = chatsById.get(id);
+        if (chat) chat.unreadCount = Math.max(before, Number(chat.unreadCount) || 0);
+      }
+      throw error;
+    }
+
+    const activeUnread = [...chatsById.values()]
+      .filter((chat) => chat.lastActivity && !chat.isArchived && Number(chat.unreadCount) > 0);
+    lastUnreadSyncAt = new Date().toISOString();
+    unreadSyncStatus = 'complete';
+    unreadSyncDetail = `Matched ${activeUnread.length} unread WhatsApp chats.`;
+    scheduleSave();
+    return {
+      ok: true,
+      unreadChats: activeUnread.length,
+      unreadMessages: activeUnread.reduce(
+        (sum, chat) => sum + Math.max(0, Number(chat.unreadCount) || 0),
+        0,
+      ),
+      at: lastUnreadSyncAt,
+    };
+  } catch (error) {
+    unreadSyncStatus = 'error';
+    unreadSyncDetail = String(error?.message || error);
+    scheduleSave();
+    throw error;
+  }
+}
+
 export function getMessages(chatId, limit = 20) {
   if (!chatsById.size) loadStore();
   const list = messagesById.get(canonicalWhatsAppJid(whatsappJid(chatId))) || [];
@@ -824,10 +966,7 @@ function startSocket({ state, saveCreds }, opts) {
   });
 
   sock.ev.on('chats.update', (chats) => {
-    for (const c of chats || []) {
-      const jid = jidNormalizedUser(c.id || '');
-      if (jid) upsertChat(jid, normalizeChatPatch(c));
-    }
+    for (const c of chats || []) applyChatUpdate(c);
     scheduleSave();
   });
 

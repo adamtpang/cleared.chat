@@ -30,6 +30,7 @@ import {
   pairWithQr,
   isWhatsAppChatId,
   applyUnreadReference as applyWhatsAppUnreadReference,
+  resyncUnreadState as resyncWhatsAppUnreadState,
   setContactAlias as setWhatsAppContactAlias,
 } from './whatsapp.mjs';
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
@@ -1614,6 +1615,10 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const items = Array.isArray(body.items) ? body.items : [];
       return send(res, 200, applyWhatsAppUnreadReference(items));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/wa/unread-sync') {
+      if (!WHATSAPP_DIRECT) return send(res, 400, { error: 'Direct WhatsApp is disabled.' });
+      return send(res, 200, await resyncWhatsAppUnreadState());
     }
     if (req.method === 'POST' && url.pathname === '/api/wa/contact-name') {
       const body = await readBody(req);

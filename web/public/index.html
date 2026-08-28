@@ -562,6 +562,7 @@
       <a class="act" id="accountbtn" href="/account" title="Account" hidden>Account</a>
       <button class="act" onclick="openSettings()" title="Settings">Settings</button>
       <button class="act" id="loadall" onclick="loadEverything()" hidden>Reload everything</button>
+      <button class="act" id="syncunread" onclick="syncWhatsAppUnread()" title="Refresh unread chats directly from WhatsApp">Sync unread</button>
       <button class="btn" id="run" onclick="runTriage()" title="Rank open WhatsApp loops by importance and urgency">Triage inbox</button>
     </div>
   </header>
@@ -574,8 +575,9 @@
         <span class="clr" onclick="clearRolodex()" title="clear">&times;</span>
       </div>
       <div class="tabs" id="tabs">
+        <button data-tab="unread" id="unreadtab" class="on" onclick="setTab('unread')">Unread <span class="cnt" id="cntUnread"></span></button>
         <button data-tab="priorities" id="prioritytab" onclick="setTab('priorities')">Priorities <span class="cnt" id="cntPriority"></span></button>
-        <button data-tab="messages" class="on" onclick="setTab('messages')">Messages <span class="cnt" id="cntMsg"></span></button>
+        <button data-tab="messages" onclick="setTab('messages')">All <span class="cnt" id="cntMsg"></span></button>
         <button data-tab="email" id="emailtab" onclick="setTab('email')">Email <span class="cnt" id="cntMail"></span></button>
       </div>
       <div class="sidestats" id="sidestats"></div>
@@ -705,6 +707,7 @@
         <div id="srcstatus"><div class="hint2">Load once to see source status.</div></div>
         <div style="display:flex;gap:var(--space-2x);margin-top:var(--space-3x)">
           <button class="act" onclick="loadEverything();closeSettings()">Reload sources</button>
+          <button class="act" onclick="syncWhatsAppUnread();closeSettings()">Sync unread</button>
           <button class="act" onclick="runTriage();closeSettings()">Refresh priorities</button>
         </div>
         <div class="pairbox">
@@ -796,7 +799,7 @@
   // is cheap enough to just do.
   window.addEventListener("DOMContentLoaded", () => {
     loadAccountState();
-    loadEverything().then(() => loadLatestTriage(true));
+    loadEverything().then(() => loadLatestTriage(false));
     setTimeout(refreshWhatsAppStatus, 250);
   });
 
@@ -1208,7 +1211,9 @@
         ? ', ' + (wc.voiceTranscribed || 0) + ' of ' + wc.voiceNotes + ' voice notes transcribed'
         : '';
       const detail = g.whatsappDirect.status === 'open'
-        ? (wc.active || g.whatsappDirect.count || 0) + ' active, ' + (wc.archived || 0) + ' archived ignored' + voice
+        ? (wc.active || g.whatsappDirect.count || 0) + ' active, '
+          + (wc.unreadChats || 0) + ' unread, '
+          + (wc.archived || 0) + ' archived ignored' + voice
         : (g.whatsappDirect.error || g.whatsappDirect.status || '?');
       h += row('WhatsApp direct', g.whatsappDirect.status === 'open', detail);
     }
@@ -1312,6 +1317,40 @@
     }catch(e){
       $('#wapairresult').innerHTML = '<div class="pairdetail pairerror">Could not read WhatsApp status: '+esc(String(e.message||e))+'</div>';
       return {error:String(e.message||e)};
+    }
+  }
+
+  async function syncWhatsAppUnread(){
+    const buttons = [...document.querySelectorAll('[onclick^="syncWhatsAppUnread"]')];
+    buttons.forEach((button) => { button.disabled = true; button.textContent = 'Syncing'; });
+    $('#err').innerHTML = '';
+    $('#prog').classList.add('on');
+    let pct = 8;
+    setProg('requesting WhatsApp unread state', pct);
+    const timer = setInterval(() => {
+      pct = Math.min(86, pct + 2);
+      setProg('rebuilding unread chats', pct);
+    }, 700);
+
+    try {
+      const response = await fetch('/api/wa/unread-sync', { method:'POST' });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Unread sync failed');
+      clearInterval(timer);
+      setProg('loading '+data.unreadChats+' unread chats', 92);
+      const everythingResponse = await fetch('/api/all');
+      const everything = await everythingResponse.json();
+      if(!everythingResponse.ok || everything.error) throw new Error(everything.error || 'Could not reload chats');
+      renderEverything(everything);
+      setTab('unread');
+      setProg('done', 100);
+      setTimeout(() => $('#prog').classList.remove('on'), 800);
+    }catch(error){
+      clearInterval(timer);
+      $('#prog').classList.remove('on');
+      $('#err').innerHTML = '<div class="err">Unread sync failed: '+esc(String(error.message||error))+'</div>';
+    }finally{
+      buttons.forEach((button) => { button.disabled = false; button.textContent = 'Sync unread'; });
     }
   }
 
@@ -1562,17 +1601,20 @@
   let LATEST_TRIAGE_META = null;
 
   function renderSideStats(c, g){
+    const wa = g && g.whatsappDirect;
+    const synced = wa && wa.lastUnreadSyncAt
+      ? ' · synced ' + agoOf(wa.lastUnreadSyncAt) + ' ago'
+      : '';
     const emailEnabled = Boolean(g && g.gmail && g.gmail.enabled);
     $('#sidestats').innerHTML =
-        '<span><b>'+(c.total||0)+'</b> total</span>'
-      + '<span><b>'+(c.messages||0)+'</b> chats</span>'
+        '<span><b>'+(c.unread||0)+'</b> unread chats'+synced+'</span>'
+      + '<span><b>'+(c.messages||0)+'</b> total chats</span>'
       + (emailEnabled ? '<span><b>'+(c.emails||0)+'</b> email</span>' : '')
-      + '<span title="WhatsApp companion sync can undercount this. Triage checks every active chat."><b>'+(c.unread||0)+'</b> WA unread flags</span>'
       + (g && g.gmail && g.gmail.authMode === 'token' ? '<span title="sprite.email refreshes these">tokens ~1h</span>' : '')
       + (g && g.whatsappDirect ? '<span>wa: '+esc(g.whatsappDirect.status||'?')+'</span>' : '');
   }
 
-  let TAB = 'messages';
+  let TAB = 'unread';
   function setTab(t){
     TAB = t;
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
@@ -1616,6 +1658,7 @@
       return;
     }
     const msgs = items.filter(i => i.kind === 'message');
+    const unread = msgs.filter(i => i.unread > 0 && !i.isArchived);
     const mail = items.filter(i => i.kind === 'email');
     const inbox = mail.filter(i => !i.isArchived);
     const filed = mail.filter(i => i.isArchived);
@@ -1635,7 +1678,11 @@
       '<div class="acctlabel">'+esc(acct)+' <span>'+list.length+'</span></div>' + rows(list)).join('');
 
     let html = '';
-    if(TAB === 'messages'){
+    if(TAB === 'unread'){
+      html += unread.length
+        ? rows(unread)
+        : '<div class="empty-main">No unread WhatsApp chats. You are caught up.</div>';
+    } else if(TAB === 'messages'){
       html += msgs.length
         ? rows(msgs)
         : '<div class="empty-main">No chats match.</div>';
@@ -1903,11 +1950,12 @@
     const directCount = Number(g.whatsappDirect?.counts?.active ?? g.whatsappDirect?.count ?? 0);
     if(directCount > 0) waLastLoadedCount = directCount;
     renderSideStats(c, g);
+    $('#cntUnread').textContent = c.unread || 0;
     $('#cntMsg').textContent = c.messages || 0;
     $('#cntMail').textContent = c.emails || 0;
     const emailVisible = Boolean(g.gmail && g.gmail.enabled && c.emails > 0);
     $('#emailtab').style.display = emailVisible ? '' : 'none';
-    if(!emailVisible && TAB === 'email') setTab(LATEST_TRIAGE_ITEMS.length ? 'priorities' : 'messages');
+    if(!emailVisible && TAB === 'email') setTab(c.unread ? 'unread' : (LATEST_TRIAGE_ITEMS.length ? 'priorities' : 'messages'));
 
     // Surface a failed source instead of quietly showing a short list.
     const errs = data.errors || [];
@@ -1916,7 +1964,9 @@
 
     paintList(ALL);
     if(!openId && window.matchMedia('(min-width: 821px)').matches){
-      const first = ALL.find((item) => item.kind === 'message') || ALL[0];
+      const first = TAB === 'unread'
+        ? ALL.find((item) => item.kind === 'message' && item.unread > 0 && !item.isArchived)
+        : ALL.find((item) => item.kind === 'message') || ALL[0];
       if(first) setTimeout(() => openChat(first.id), 0);
     }
   }
