@@ -1148,6 +1148,7 @@
   }
 
   let waPoll = null;
+  let waPollRate = 0;
   let waStartedAt = 0;
   let waLastLoadedCount = -1;
   let waReloadPending = false;
@@ -1173,8 +1174,13 @@
       + '<div class="pairdetail">'+esc(detail || d.statusDetail || 'Working')+'</div>';
   }
   function startWhatsAppPoll(){
+    scheduleWhatsAppPoll(1000);
+  }
+  function scheduleWhatsAppPoll(interval){
+    if(waPoll && waPollRate === interval) return;
     clearInterval(waPoll);
-    waPoll = setInterval(refreshWhatsAppStatus, 1000);
+    waPollRate = interval;
+    waPoll = setInterval(refreshWhatsAppStatus, interval);
   }
   async function refreshWhatsAppStatus(){
     try{
@@ -1189,15 +1195,14 @@
         $('#wapairresult').innerHTML = whatsappProgress(d,3,-1,'Connected directly. WhatsApp messages can now load locally.' + history);
         qrButton.disabled = false;
         qrButton.textContent = 'Connected';
-        if(d.historyStatus === 'complete') { clearInterval(waPoll); waPoll = null; }
-        else if(!waPoll) waPoll = setInterval(refreshWhatsAppStatus, 1800);
+        scheduleWhatsAppPoll(d.historyStatus === 'complete' ? 10000 : 1800);
       }else if(d.status === 'qr' && d.qrDataUrl){
         $('#wapairresult').innerHTML = whatsappProgress(d,2,3,'The QR is ready. Open WhatsApp on your phone, then Linked Devices, Link a Device.')
           + '<img class="pairqr" src="'+esc(d.qrDataUrl)+'" alt="WhatsApp linking QR">'
           + '<div class="pairdetail">Keep this screen open until cleared.chat confirms the connection.</div>';
         qrButton.disabled = false;
         qrButton.textContent = 'New QR';
-        if(!waPoll) waPoll = setInterval(refreshWhatsAppStatus, 1800);
+        scheduleWhatsAppPoll(1800);
       }else if(d.status === 'connecting'){
         const seconds = Math.round(Number(d.pairingElapsedMs || 0)/1000);
         const detail = seconds < 5
@@ -1210,13 +1215,13 @@
         $('#wapairresult').innerHTML = whatsappProgress(d,0,1,detail);
         qrButton.disabled = false;
         qrButton.textContent = 'Start new QR';
-        if(!waPoll) waPoll = setInterval(refreshWhatsAppStatus, 1800);
+        scheduleWhatsAppPoll(1800);
       }else if(d.status === 'retrying'){
         $('#wapairresult').innerHTML = whatsappProgress(d,0,1,d.statusDetail || 'The connection dropped. Retrying automatically.');
         qrButton.disabled = false;
         qrButton.textContent = 'Restart QR';
       }else if(d.status === 'error'){
-        clearInterval(waPoll); waPoll = null;
+        clearInterval(waPoll); waPoll = null; waPollRate = 0;
         const technical = [d.lastCloseCode ? 'WhatsApp status '+d.lastCloseCode : '', d.lastError || ''].filter(Boolean).join(': ');
         $('#wapairresult').innerHTML = whatsappProgress(d,0,-1,d.statusDetail || 'WhatsApp rejected this attempt.')
           + (technical ? '<div class="pairdetail pairerror" style="margin-top:7px">'+esc(technical)+'</div>' : '');
@@ -1758,6 +1763,8 @@
     LAST_SOURCES = data.sources || null;
     const c = data.counts || {};
     const g = data.sources || {};
+    const directCount = Number(g.whatsappDirect?.counts?.active ?? g.whatsappDirect?.count ?? 0);
+    if(directCount > 0) waLastLoadedCount = directCount;
     renderSideStats(c, g);
     $('#cntMsg').textContent = c.messages || 0;
     $('#cntMail').textContent = c.emails || 0;
