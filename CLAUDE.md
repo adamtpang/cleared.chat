@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `863cee1`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `b25394e`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -83,6 +83,10 @@ voice notes are transcribed locally as they arrive. A conversation with stored
 voice notes exposes `Voice transcripts .md`, which downloads a received-only
 Markdown file with timestamps, durations, statuses, and transcript text. Sent
 voice notes and unrelated message text are excluded from that export.
+
+Every rendered message bubble shows an exact local hour and minute. Messages
+from yesterday include `Yesterday`; older messages include their date. The full
+local date and time remains available in the timestamp tooltip.
 
 Baileys history snapshots use absolute unread counts, while live
 `chats.update` events use `-1` for mark unread, `0` for read, and positive
