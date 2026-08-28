@@ -38,7 +38,7 @@ WhatsApp linked-device credentials.
 
 ## Beta limits
 
-The WhatsApp worker currently uses Baileys multi-file auth state on an encrypted
+The WhatsApp worker currently uses Baileys multi-file auth state on a restricted
 persistent volume. This is appropriate for a small hosted beta. Before larger
 scale, move auth keys and message state into a transactional database and run
 workers as separately supervised services.

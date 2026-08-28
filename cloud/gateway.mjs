@@ -136,7 +136,7 @@ export function createGateway(options = {}) {
       const user = accounts.userForSession(sessionToken);
 
       if (req.method === 'GET' && url.pathname === '/health') {
-        return send(res, 200, JSON.stringify({ ok: true, accounts: accounts.listUserIds().length }), 'application/json; charset=utf-8');
+        return send(res, 200, JSON.stringify({ ok: true }), 'application/json; charset=utf-8');
       }
       if (req.method === 'GET' && url.pathname === '/icon.svg' && existsSync(ICON)) {
         return send(res, 200, readFileSync(ICON), 'image/svg+xml', { 'Cache-Control': 'public, max-age=86400' });

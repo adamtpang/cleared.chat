@@ -20,7 +20,7 @@ async function freePort() {
 }
 
 async function waitForWorker(port, child) {
-  for (let attempt = 0; attempt < 80; attempt++) {
+  for (let attempt = 0; attempt < 240; attempt++) {
     if (child.exitCode !== null) throw new Error(`worker exited with code ${child.exitCode}`);
     try {
       const response = await fetch(`http://127.0.0.1:${port}/api/license/status`);
