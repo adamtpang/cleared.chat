@@ -4,46 +4,57 @@ Guidance for Claude Code working in this repo.
 
 ## What this is
 
-beeper.chat is a **Claude Code skill** that clears the user's Beeper inbox to
-zero each day. There is no build step, no server, no test runner — the
-deliverable is the skill plus its supporting docs and data templates.
+cleared.chat is a local-first Electron messaging client with a browser-based
+development mode. It connects directly to WhatsApp through Baileys, restores a
+saved linked-device session on startup, ranks open loops by importance x
+urgency, transcribes received voice notes, and prepares editable drafts.
 
-The brain is **`.claude/skills/beeper/SKILL.md`**. Read it before changing
-behavior. Run it with `/beeper`.
+The runtime is `web/server.mjs`, the direct WhatsApp adapter is
+`web/whatsapp.mjs`, the interface is `web/public/index.html`, and the desktop
+shell is `desktop/main.js`. Gmail and Discord are optional adapters. The Beeper
+Desktop adapter is legacy, disabled by default, and not required.
 
 ## The one rule
 
-The Beeper MCP token has **write** scope. **Never** send, reply, react, archive,
-or mark-read on Beeper without the user's explicit per-action OK. Drafting is
-fine; mutating is not. This rule lives in SKILL.md "Rule 0" and must survive any
-edit.
+Agents must **never** send, reply, react, archive, mark read, post, email, DM, or
+otherwise communicate externally as Adam. This remains true even when Adam says
+`send`, says `yes`, or approves exact wording. Agents may read context, draft,
+revise, and present copy-ready text. Adam performs the final communication
+action manually.
 
-## How it works (data flow)
+## How it works
 
-1. `beeper` MCP (local, `http://127.0.0.1:23373`) → unread chats across all
-   networks.
-2. Score each by **importance × urgency** (rubric in SKILL.md, examples in
-   `docs/scoring.md`), classify as REPLY / TASK / NOISE.
-3. Present top chat first as a context bundle, pulling facts from `kb/<slug>.md`
-   and voice from `me.md`.
-4. Act only on the user's OK; send via the Beeper send tool.
-5. Update `kb/<slug>.md`; log tasks to `tasks.md`.
+1. The server restores the saved direct WhatsApp session during startup.
+2. Live Baileys events update the private local chat store automatically.
+3. Every open loop is scored by importance x urgency and classified as reply,
+   task-first, later, or no reply owed.
+4. Unclear intent or facts produce one clarifying question before any draft.
+5. Drafts are editable, contain no em dashes or emojis, and are copied only
+   after explicit UI confirmation.
 
-## Conventions
+## Private state
 
-- **Person-KB is plain Markdown**, one file per contact, slug filename
-  (lowercase-kebab). Chosen over JSON/SQLite so it's human-readable,
-  diff-friendly, and writable with normal file tools. Template: `kb/_template.md`.
-- **Private data stays out of git**: `kb/*` (except README + template), `me.md`,
-  `tasks.md` are gitignored. The shareable scaffold (skill, docs, templates) is
-  what gets committed — this is built in public.
-- Don't hardcode Beeper MCP tool names; discover them at runtime (they vary by
-  version) and prefer read/list/search tools.
-- Beeper MCP is **local only** — features here cannot run in a cloud/remote
-  session; they need Beeper Desktop running on the user's machine.
+- WhatsApp credentials and messages live under the local app-data directory.
+- `kb/*`, except templates, `me.md`, `tasks.md`, snapshots, exports, `.env`, and
+  WhatsApp auth stores are private and gitignored.
+- Never deploy private runtime state. Vercel receives only `index.html`,
+  `icon.svg`, `robots.txt`, and `sitemap.xml` via `.vercelignore`.
+
+## Development
+
+```powershell
+cd web
+npm install
+npm test
+npm run dev
+```
+
+The local app runs at `http://127.0.0.1:4317`. A valid saved WhatsApp link
+reconnects automatically. A revoked link returns `401` and must be paired once
+again from Settings.
 
 ## Related
 
-Sibling product `../sprite.email` is a separate Next.js web app for Gmail
-triage (no shared code today). beeper.chat and sprite.email share only the
-*concept* of importance/urgency triage, not a library.
+Sibling product `../sprite.email` applies the same importance and urgency model
+to Gmail. Its historical bridge document remains at
+`../sprite.email/SIBLING_BEEPER_CHAT.md`.

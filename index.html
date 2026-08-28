@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>beeper.chat: inbox zero by importance × urgency</title>
-<meta name="description" content="Free, open-source Claude Code skill that triages your Beeper inbox by importance × urgency and drafts replies in your voice. Never sends without OK." />
-<meta name="theme-color" content="#6A4BE5" />
-<link rel="canonical" href="https://beeper.chat/" />
+<title>cleared.chat: inbox zero by importance × urgency</title>
+<meta name="description" content="A private messaging inbox that prioritizes every open loop and helps you craft the right reply. Agents never send." />
+<meta name="theme-color" content="#087D86" />
+<link rel="canonical" href="https://cleared.chat/" />
 <meta property="og:type" content="website" />
-<meta property="og:title" content="beeper.chat: inbox zero by importance × urgency" />
-<meta property="og:description" content="A Claude Code skill that triages your whole Beeper inbox by importance × urgency, drafts replies in your voice, and never sends without your OK." />
-<meta property="og:url" content="https://beeper.chat/" />
+<meta property="og:title" content="cleared.chat: inbox zero by importance × urgency" />
+<meta property="og:description" content="Prioritize every open messaging loop, decide the next action, and craft the right reply. The human always sends." />
+<meta property="og:url" content="https://cleared.chat/" />
 <meta name="twitter:card" content="summary_large_image" />
-<link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;text y='.9em' font-size='90'&gt;📥&lt;/text&gt;&lt;/svg&gt;" />
+<link rel="icon" href="desktop/build/icon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -22,40 +22,34 @@
   "@graph": [
     {
       "@type": "Organization",
-      "@id": "https://beeper.chat/#organization",
-      "name": "beeper.chat",
-      "url": "https://beeper.chat/",
+      "@id": "https://cleared.chat/#organization",
+      "name": "cleared.chat",
+      "url": "https://cleared.chat/",
       "sameAs": [
-        "https://github.com/adamtpang/beeper.chat"
+        "https://github.com/adamtpang/cleared.chat"
       ]
     },
     {
       "@type": "WebSite",
-      "@id": "https://beeper.chat/#website",
-      "name": "beeper.chat",
-      "url": "https://beeper.chat/",
-      "description": "Free, open-source Claude Code skill that triages your Beeper inbox by importance × urgency and drafts replies in your voice. Never sends without OK.",
-      "publisher": { "@id": "https://beeper.chat/#organization" }
+      "@id": "https://cleared.chat/#website",
+      "name": "cleared.chat",
+      "url": "https://cleared.chat/",
+      "description": "A private messaging inbox that prioritizes every open loop and helps you craft the right reply. Agents never send.",
+      "publisher": { "@id": "https://cleared.chat/#organization" }
     }
   ]
 }
 </script>
 <style>
-  /* Beeper brand font (Haskoy), with Inter fallback (Beeper's own stack) */
-  @font-face{font-family:'Haskoy';font-style:normal;font-weight:400;font-display:swap;src:url('https://cdn.jsdelivr.net/npm/@fontsource/haskoy/files/haskoy-latin-400-normal.woff2') format('woff2')}
-  @font-face{font-family:'Haskoy';font-style:normal;font-weight:500;font-display:swap;src:url('https://cdn.jsdelivr.net/npm/@fontsource/haskoy/files/haskoy-latin-500-normal.woff2') format('woff2')}
-  @font-face{font-family:'Haskoy';font-style:normal;font-weight:700;font-display:swap;src:url('https://cdn.jsdelivr.net/npm/@fontsource/haskoy/files/haskoy-latin-700-normal.woff2') format('woff2')}
-  @font-face{font-family:'Haskoy';font-style:normal;font-weight:800;font-display:swap;src:url('https://cdn.jsdelivr.net/npm/@fontsource/haskoy/files/haskoy-latin-800-normal.woff2') format('woff2')}
-
   :root{
-    --bg:#FFFFFF; --soft:#F8F8F8; --soft2:#F1F1F1;
-    --ink:#1E1E1E; --muted:#5F6368; --faint:#9AA0A6;
-    --line:#D7D7E0; --line2:#ECECF1;
-    --brand:#6A4BE5; --brand-light:#9E7EF8; --brand-ink:#34219b;
-    --grad:linear-gradient(180deg,#9E7EF8,#6A4BE5);
-    --blue:#0D4FFB; --blue-light:#2E9BFF;
-    --dark:#1F1E22; --navy:#0D0D1A;
-    --font:"Haskoy","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --bg:#F4F9F9; --soft:#FFFFFF; --soft2:#E7F0F1;
+    --ink:#152124; --muted:#53696D; --faint:#667C80;
+    --line:#D3E1E2; --line2:#E2EBEC;
+    --brand:#087D86; --brand-light:#52CCD3; --brand-ink:#07575E;
+    --grad:var(--brand);
+    --blue:#1D5FA7; --blue-light:#70B7E8;
+    --dark:#0E1719; --navy:#152023;
+    --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
@@ -66,8 +60,8 @@
 
   /* nav */
   nav{display:flex;align-items:center;justify-content:space-between;padding:24px 0}
-  .brand{font-weight:800;font-size:18px;letter-spacing:-.02em;display:flex;align-items:center;gap:9px;color:var(--ink)}
-  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--grad);box-shadow:0 0 0 4px rgba(106,75,229,.14)}
+  .brand{font-weight:800;font-size:18px;letter-spacing:0;display:flex;align-items:center;gap:9px;color:var(--ink)}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px rgba(8,125,134,.12)}
   .nav-links{display:flex;gap:24px;font-size:14px;font-weight:500;color:var(--muted);align-items:center}
   .nav-links a{color:var(--muted);transition:color .2s}.nav-links a:hover{color:var(--ink)}
   .nav-links a.gh{color:#fff;background:var(--ink);padding:9px 16px;border-radius:999px;font-weight:600}
@@ -75,20 +69,21 @@
 
   /* hero */
   .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center;padding:60px 0 40px;position:relative}
-  .hero::before{content:"";position:absolute;inset:-20% -30% auto auto;width:46rem;height:34rem;background:radial-gradient(closest-side,rgba(106,75,229,.16),transparent 70%);z-index:-1;pointer-events:none}
-  h1{font-weight:800;font-size:clamp(40px,6vw,68px);line-height:1.02;letter-spacing:-.03em}
-  h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:var(--brand)}
+  .hero>*{min-width:0}
+  .hero::before{display:none}
+  h1{font-weight:800;font-size:64px;line-height:1.02;letter-spacing:0}
+  h1 .g{color:var(--brand)}
   .lede{color:var(--muted);font-size:clamp(16px,1.4vw,19px);max-width:31em;margin:22px 0 30px}
   .lede b{color:var(--ink);font-weight:600}
   .cta{display:flex;gap:13px;flex-wrap:wrap;align-items:center}
-  .btn{font-size:13.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:14px 24px;border-radius:999px;display:inline-flex;gap:9px;align-items:center;transition:transform .15s ease,box-shadow .2s ease,background .2s,border-color .2s;cursor:pointer}
-  .btn.primary{background:var(--grad);color:#fff;box-shadow:0 10px 26px -10px rgba(106,75,229,.7)}
-  .btn.primary:hover{transform:translateY(-2px);box-shadow:0 16px 36px -12px rgba(106,75,229,.8)}
+  .btn{font-size:13.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:13px 22px;border-radius:6px;display:inline-flex;gap:9px;align-items:center;transition:transform .15s ease,box-shadow .2s ease,background .2s,border-color .2s;cursor:pointer}
+  .btn.primary{background:var(--brand);color:#fff;box-shadow:0 10px 24px -14px rgba(8,125,134,.7)}
+  .btn.primary:hover{transform:translateY(-1px);box-shadow:0 14px 30px -16px rgba(8,125,134,.75)}
   .btn.ghost{background:#fff;color:var(--brand);border:1.5px solid var(--line)}
   .btn.ghost:hover{border-color:var(--brand)}
   .trust{margin-top:22px;font-size:13px;font-weight:500;color:var(--muted);display:flex;align-items:center;gap:9px}
   .trust .d{width:8px;height:8px;border-radius:50%;background:var(--brand)}
-  .install{margin-top:20px;display:inline-flex;align-items:center;gap:8px;background:var(--dark);color:#ECEAF5;border:1px solid rgba(106,75,229,.35);border-radius:12px;padding:11px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;cursor:pointer;max-width:100%;overflow:auto;white-space:nowrap;transition:border-color .2s}
+  .install{margin-top:20px;display:inline-flex;align-items:center;gap:8px;background:var(--dark);color:#EDF7F8;border:1px solid rgba(82,204,211,.32);border-radius:8px;padding:11px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;cursor:pointer;max-width:100%;overflow:auto;white-space:nowrap;transition:border-color .2s}
   .install:hover{border-color:var(--brand)}
   .install .p{color:var(--brand-light);font-weight:700}
   .install code{color:#ECEAF5}
@@ -97,18 +92,18 @@
   .req{margin-top:10px;font-size:12.5px;color:var(--faint)}
 
   /* hero inbox card */
-  .inbox{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 30px 60px -30px rgba(31,30,34,.28)}
+  .inbox{background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 24px 50px -32px rgba(21,33,36,.34)}
   .inbox-head{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:6px 8px 14px}
   .inbox-head .live{display:flex;align-items:center;gap:7px;color:var(--brand)}
   .inbox-head .live i{width:7px;height:7px;border-radius:50%;background:var(--brand);display:inline-block;animation:blink 2s infinite}
-  .row{display:flex;align-items:center;gap:13px;padding:12px 10px;border-radius:13px;opacity:0;transform:translateY(8px);animation:rise .55s ease forwards}
+  .row{display:flex;align-items:center;gap:13px;padding:12px 10px;border-radius:6px;opacity:0;transform:translateY(8px);animation:rise .55s ease forwards}
   .row .pic{width:32px;height:32px;border-radius:10px;flex:none;display:grid;place-items:center;font-size:15px;background:var(--soft2)}
   .row .body{min-width:0;flex:1}
   .row .who{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center}
   .row .prev{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .score{font-size:12px;font-weight:800;padding:4px 9px;border-radius:8px;flex:none}
-  .row.top{background:rgba(106,75,229,.07);border:1px solid rgba(106,75,229,.28)}
-  .row.top .pic{background:rgba(106,75,229,.14)}
+  .row.top{background:rgba(8,125,134,.07);border:1px solid rgba(8,125,134,.28)}
+  .row.top .pic{background:rgba(8,125,134,.14)}
   .row.signal{background:rgba(13,79,251,.05);border:1px solid rgba(13,79,251,.16)}
   .score.s-top{background:var(--brand);color:#fff}
   .score.s-sig{background:rgba(13,79,251,.12);color:var(--blue)}
@@ -118,49 +113,49 @@
 
   /* stats */
   .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:30px 0 8px}
-  .stat{background:var(--soft);border:1px solid var(--line2);border-radius:16px;padding:24px}
-  .stat .n{font-weight:800;font-size:clamp(26px,3.2vw,38px);letter-spacing:-.02em;line-height:1}
+  .stat{background:var(--soft);border:1px solid var(--line2);border-radius:8px;padding:24px}
+  .stat .n{font-weight:800;font-size:38px;letter-spacing:0;line-height:1}
   .stat .n.p{color:var(--brand)}.stat .n.b{color:var(--blue)}.stat .n.d{color:var(--ink)}
   .stat .l{font-size:12.5px;color:var(--muted);margin-top:10px}
 
   section{padding:80px 0}
   .kicker{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:14px}
-  h2{font-weight:800;font-size:clamp(28px,4vw,44px);letter-spacing:-.025em;line-height:1.05}
+  h2{font-weight:800;font-size:44px;letter-spacing:0;line-height:1.05}
   h2 .g{color:var(--brand)}
   .sub{color:var(--muted);max-width:34em;margin-top:14px;font-size:16.5px}
-  .cmd{font-weight:800;color:var(--brand);background:rgba(106,75,229,.1);padding:2px 9px;border-radius:7px;font-size:.82em}
+  .cmd{font-weight:800;color:var(--brand);background:rgba(8,125,134,.1);padding:2px 9px;border-radius:6px;font-size:.82em}
 
   /* matrix */
   .matrix-grid{display:grid;grid-template-columns:auto 1fr;gap:14px;margin-top:44px;align-items:stretch}
   .yaxis{writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);text-align:center;padding:8px 0}
   .quad{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:14px;aspect-ratio:16/9}
-  .cell{border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;justify-content:space-between;background:#fff;min-height:120px;position:relative;overflow:hidden}
+  .cell{border:1px solid var(--line);border-radius:8px;padding:20px;display:flex;flex-direction:column;justify-content:space-between;background:#fff;min-height:120px;position:relative;overflow:hidden}
   .cell .q{font-size:11px;font-weight:600;color:var(--faint)}
-  .cell .t{font-weight:800;font-size:22px;letter-spacing:-.01em}
-  .cell.now{border-color:rgba(106,75,229,.4);background:radial-gradient(36rem 12rem at 82% 120%,rgba(106,75,229,.14),#fff)}
+  .cell .t{font-weight:800;font-size:22px;letter-spacing:0}
+  .cell.now{border-color:rgba(8,125,134,.4);background:#F1FAFA}
   .cell.now .t{color:var(--brand)}
-  .cell.now .pulse{position:absolute;top:16px;right:16px;width:9px;height:9px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 0 rgba(106,75,229,.55);animation:pulse 2s infinite}
+  .cell.now .pulse{position:absolute;top:16px;right:16px;width:9px;height:9px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 0 rgba(8,125,134,.55);animation:pulse 2s infinite}
   .cell.sched .t{color:var(--blue)}
   .xaxis{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);text-align:center;margin-top:12px;padding-left:34px}
 
   /* steps */
   .steps{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:44px}
-  .step{border:1px solid var(--line);border-radius:18px;padding:28px;background:#fff;transition:box-shadow .2s,transform .2s}
+  .step{border:1px solid var(--line);border-radius:8px;padding:28px;background:#fff;transition:box-shadow .2s,transform .2s}
   .step:hover{box-shadow:0 20px 40px -28px rgba(31,30,34,.35);transform:translateY(-2px)}
   .step .num{font-weight:800;font-size:13px;color:#fff;background:var(--grad);width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
-  .step h3{font-weight:800;font-size:21px;margin:16px 0 8px;letter-spacing:-.01em}
+  .step h3{font-weight:800;font-size:21px;margin:16px 0 8px;letter-spacing:0}
   .step p{color:var(--muted);font-size:15px}
   .step .net{margin-top:14px;display:flex;gap:7px;flex-wrap:wrap}
-  .chip{font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:20px;padding:4px 11px}
+  .chip{font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 11px}
 
   /* quote */
   .quote{text-align:center;padding:90px 0}
-  .quote p{font-weight:800;font-size:clamp(26px,3.6vw,40px);letter-spacing:-.02em;line-height:1.15;max-width:20ch;margin:0 auto}
+  .quote p{font-weight:800;font-size:40px;letter-spacing:0;line-height:1.15;max-width:20ch;margin:0 auto}
   .quote .g{color:var(--brand)}
 
-  /* final cta (dark Beeper feature-section style) */
-  .final{text-align:center;border-radius:26px;padding:64px 32px;margin-bottom:30px;background:var(--dark);color:#fff;position:relative;overflow:hidden}
-  .final::before{content:"";position:absolute;inset:auto auto -40% 50%;transform:translateX(-50%);width:50rem;height:30rem;background:radial-gradient(closest-side,rgba(106,75,229,.45),transparent 70%);pointer-events:none}
+  /* final call to action */
+  .final{text-align:center;border-radius:8px;padding:64px 32px;margin-bottom:30px;background:var(--dark);color:#fff;position:relative;overflow:hidden}
+  .final::before{display:none}
   .final .kicker{color:var(--brand-light)}
   .final h2{margin-bottom:12px}
   .final .sub{color:#c9c7d2;margin:14px auto 0}
@@ -176,16 +171,24 @@
   html.js .rv{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s ease}
   html.js .rv.in{opacity:1;transform:none}
   @keyframes rise{to{opacity:1;transform:none}}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(106,75,229,.5)}70%{box-shadow:0 0 0 14px rgba(106,75,229,0)}100%{box-shadow:0 0 0 0 rgba(106,75,229,0)}}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(8,125,134,.5)}70%{box-shadow:0 0 0 14px rgba(8,125,134,0)}100%{box-shadow:0 0 0 0 rgba(8,125,134,0)}}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html.js .rv{opacity:1;transform:none}}
   @media(max-width:880px){
-    .hero{grid-template-columns:1fr;gap:36px;padding:34px 0}
+    .hero{grid-template-columns:minmax(0,1fr);gap:24px;padding:24px 0 20px}
+    .hero>div{min-width:0;max-width:100%;overflow:hidden}
+    .install{width:100%}
+    .inbox .row:nth-child(n+4){display:none}
+    h1{font-size:44px}
+    h2{font-size:34px}
+    .stat .n{font-size:32px}
+    .quote p{font-size:32px}
     .stats{grid-template-columns:1fr}
     .steps{grid-template-columns:1fr}
     .quad{aspect-ratio:auto}
     .nav-links a:not(.gh){display:none}
   }
+  @media(max-width:520px){h1{font-size:38px}}
 </style>
 </head>
 <body>
@@ -193,53 +196,53 @@
 <div class="wrap">
 
   <nav>
-    <div class="brand"><span class="dot"></span>beeper.chat</div>
+    <div class="brand"><span class="dot"></span>cleared.chat</div>
     <div class="nav-links">
       <a href="#start">get started</a>
       <a href="#how">how it works</a>
-      <a class="gh" href="https://github.com/adamtpang/beeper.chat">GitHub</a>
+      <a class="gh" href="https://github.com/adamtpang/cleared.chat">GitHub</a>
     </div>
   </nav>
 
   <header class="hero">
     <div>
-      <div class="eyebrow">open-source · claude code skill</div>
-      <h1 style="margin-top:18px">One inbox. Every network. Ranked by <span class="g">what matters.</span></h1>
-      <p class="lede">beeper.chat reads your unread Beeper chats across <b>every network</b>, ranks them by <b>importance × urgency</b>, drafts replies in <b>your voice</b>, and clears you to zero, <b>without ever sending behind your back.</b> It runs locally on your own Claude subscription, so there's <b>no per-message API bill.</b></p>
+      <div class="eyebrow">private · local-first · open source</div>
+      <h1 style="margin-top:18px">Your messages, ranked by <span class="g">what matters.</span></h1>
+      <p class="lede">cleared.chat turns WhatsApp into one focused queue, ranks open loops by <b>importance × urgency</b>, and helps draft replies in <b>your voice</b>. <b>The agent never sends.</b> You perform every final communication action manually.</p>
       <div class="cta">
-        <a class="btn primary" href="https://github.com/adamtpang/beeper.chat">Get it on GitHub</a>
+        <a class="btn primary" href="https://github.com/adamtpang/cleared.chat">Get it on GitHub</a>
         <a class="btn ghost" href="#how">How it works</a>
       </div>
       <div class="trust"><span class="d"></span> Drafts, never sends. You're always the last click.</div>
-      <div class="install" title="click to copy"><span class="p">$</span><code>git clone https://github.com/adamtpang/beeper.chat &amp;&amp; cd beeper.chat &amp;&amp; claude</code><span class="copied">copied!</span></div>
-      <div class="req">then run <span class="cmd">/beeper</span>. requires Claude Code + Beeper Desktop. runs on your Claude subscription, no API bill.</div>
+      <div class="install" title="click to copy"><span class="p">$</span><code>git clone https://github.com/adamtpang/cleared.chat &amp;&amp; cd cleared.chat/web &amp;&amp; npm install &amp;&amp; npm run dev</code><span class="copied">copied!</span></div>
+      <div class="req">Pair WhatsApp once. Your saved session reconnects and syncs automatically.</div>
     </div>
 
     <div class="inbox" aria-hidden="true">
-      <div class="inbox-head"><span>unread · all networks</span><span class="live"><i></i>triaging</span></div>
+      <div class="inbox-head"><span>open loops · WhatsApp</span><span class="live"><i></i>triaging</span></div>
       <div class="row top" style="animation-delay:.05s">
-        <div class="pic">📄</div>
+        <div class="pic">S</div>
         <div class="body"><div class="who">Sam · contract<span class="tag">DO NOW</span></div><div class="prev">needs sign-off before EOD</div></div>
         <div class="score s-top">25</div>
       </div>
       <div class="row signal" style="animation-delay:.15s">
-        <div class="pic">💬</div>
+        <div class="pic">M</div>
         <div class="body"><div class="who">Mom</div><div class="prev">can you call today?</div></div>
         <div class="score s-sig">20</div>
       </div>
       <div class="row noise" style="animation-delay:.28s">
-        <div class="pic">🔞</div>
+        <div class="pic">P</div>
         <div class="body"><div class="who">Spoil Me Club</div><div class="prev">you've been selected…</div></div>
         <div class="score s-noise">1</div>
       </div>
       <div class="row noise" style="animation-delay:.36s">
-        <div class="pic">🪙</div>
+        <div class="pic">A</div>
         <div class="body"><div class="who">Airdrop Bot</div><div class="prev">claim 5000 $PEPE now!!!</div></div>
         <div class="score s-noise">1</div>
       </div>
       <div class="row noise" style="animation-delay:.44s">
-        <div class="pic">📰</div>
-        <div class="body"><div class="who">Newsletter digest</div><div class="prev">12 unread • sale ends tonight ⏰</div></div>
+        <div class="pic">N</div>
+        <div class="body"><div class="who">Newsletter digest</div><div class="prev">12 unread, sale ends tonight</div></div>
         <div class="score s-noise">1</div>
       </div>
     </div>
@@ -247,8 +250,8 @@
 
   <div class="stats rv">
     <div class="stat"><div class="n d">100+&nbsp;→&nbsp;2</div><div class="l"># unread vs. # that actually matter</div></div>
-    <div class="stat"><div class="n p">1 queue</div><div class="l">WhatsApp · iMessage · Signal · Telegram · Discord…</div></div>
-    <div class="stat"><div class="n b">0</div><div class="l">messages sent without your OK</div></div>
+    <div class="stat"><div class="n p">1 queue</div><div class="l">WhatsApp now, more direct sources next</div></div>
+    <div class="stat"><div class="n b">0</div><div class="l">messages sent by the agent</div></div>
   </div>
 
   <section id="matrix">
@@ -261,7 +264,7 @@
         <div class="quad">
           <div class="cell sched"><div class="q">high importance · low urgency</div><div class="t">Schedule</div></div>
           <div class="cell now"><span class="pulse"></span><div class="q">high importance · high urgency</div><div class="t">Do&nbsp;now</div></div>
-          <div class="cell"><div class="q">low · low</div><div class="t">Archive</div></div>
+          <div class="cell"><div class="q">low · low</div><div class="t">Let go</div></div>
           <div class="cell"><div class="q">low importance · high urgency</div><div class="t">Quick reply</div></div>
         </div>
         <div class="xaxis">urgency →</div>
@@ -269,16 +272,16 @@
     </div>
   </section>
 
-  <section id="how" style="background:var(--soft);border-radius:26px">
+  <section id="how" style="background:var(--soft);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
     <div class="wrap" style="padding:0">
       <div class="kicker rv">how it works</div>
-      <h2 class="rv">Run <span class="cmd">/beeper</span>. Reach zero.</h2>
+      <h2 class="rv">Open cleared.chat. Reach zero.</h2>
       <div class="steps">
         <div class="step rv">
           <div class="num">1</div>
           <h3>Reads everything</h3>
-          <p>Pulls every unread chat across all your networks through the Beeper Desktop MCP, running locally on your machine.</p>
-          <div class="net"><span class="chip">WhatsApp</span><span class="chip">iMessage</span><span class="chip">Signal</span><span class="chip">Telegram</span><span class="chip">Discord</span></div>
+          <p>Restores your saved WhatsApp session and keeps new messages synced automatically.</p>
+          <div class="net"><span class="chip">WhatsApp</span><span class="chip">voice notes</span><span class="chip">direct connection</span></div>
         </div>
         <div class="step rv">
           <div class="num">2</div>
@@ -292,8 +295,8 @@
         </div>
         <div class="step rv">
           <div class="num">4</div>
-          <h3>You approve</h3>
-          <p>Send, edit, skip, or archive. It never sends, reacts, or archives without your explicit OK, every time.</p>
+          <h3>You send</h3>
+          <p>Copy the final draft and send it yourself. The agent never sends, reacts, or archives.</p>
         </div>
       </div>
     </div>
@@ -311,43 +314,44 @@
         <div class="num">1</div>
         <h3>Install</h3>
         <p>Clone the repo and open it in Claude Code.</p>
-        <div class="install" title="click to copy"><span class="p">$</span><code>git clone https://github.com/adamtpang/beeper.chat &amp;&amp; cd beeper.chat &amp;&amp; claude</code><span class="copied">copied!</span></div>
-        <div class="req">requires Claude Code + Beeper Desktop · runs on your Claude subscription, no API bill</div>
+        <div class="install" title="click to copy"><span class="p">$</span><code>git clone https://github.com/adamtpang/cleared.chat &amp;&amp; cd cleared.chat/web &amp;&amp; npm install &amp;&amp; npm run dev</code><span class="copied">copied!</span></div>
+        <div class="req">requires Node.js, WhatsApp on your phone, and your own Claude subscription</div>
       </div>
       <div class="step rv">
         <div class="num">2</div>
-        <h3>Load your Beeper feed</h3>
-        <p>Approve the Beeper MCP so the skill can read your chats across every network, locally on your machine.</p>
+        <h3>Pair WhatsApp once</h3>
+        <p>Scan the private linking QR from WhatsApp on your phone. Your credentials stay on your machine.</p>
       </div>
       <div class="step rv">
         <div class="num">3</div>
         <h3>Run triage</h3>
-        <p>Run <span class="cmd">/beeper</span>. It ranks every unread chat by importance × urgency and surfaces the most important one first.</p>
+        <p>Open the local app. It syncs your saved WhatsApp session, ranks open loops by importance × urgency, and surfaces the most important one first.</p>
       </div>
       <div class="step rv">
         <div class="num">4</div>
         <h3>Reply to your priority chats</h3>
-        <p>Work the top chats first, with replies drafted in your voice. Nothing sends without your OK.</p>
+        <p>Work the top chats first, with replies drafted in your voice. You send every message manually.</p>
       </div>
     </div>
   </section>
 
   <section style="padding-top:10px">
     <div class="final rv">
-      <div class="kicker">built in public · with the beeper community</div>
+      <div class="kicker">built in public</div>
       <h2>Get to inbox zero <span style="color:var(--brand-light)">today.</span></h2>
-      <p class="sub">Clone the skill, point it at Beeper Desktop, and run <span class="cmd" style="background:rgba(255,255,255,.12);color:#fff">/beeper</span>. Free, open source, and it runs on your own Claude subscription, no API bill.</p>
+      <p class="sub">Clone the app, pair WhatsApp once, and work the priority queue. Free, open source, and it runs on your own Claude subscription.</p>
       <div class="cta">
-        <a class="btn primary" href="https://github.com/adamtpang/beeper.chat">Get it on GitHub</a>
-        <a class="btn ghost" href="https://github.com/adamtpang/beeper.chat#setup-one-time">Setup guide</a>
+        <a class="btn primary" href="https://github.com/adamtpang/cleared.chat">Get it on GitHub</a>
+        <a class="btn ghost" href="https://github.com/adamtpang/cleared.chat#setup-one-time">Setup guide</a>
       </div>
     </div>
   </section>
 
   <footer>
-    <span class="r0"><span class="d"></span> Rule 0: never sends without your OK</span>
-    <span>Runs locally with Beeper Desktop</span>
-    <span>Made with Claude Code · <a href="https://github.com/adamtpang/beeper.chat">github.com/adamtpang/beeper.chat</a></span>
+    <span class="r0"><span class="d"></span> Rule 0: agents never send</span>
+    <span>Runs locally with direct source connections</span>
+    <span>Made with Claude Code · <a href="https://github.com/adamtpang/cleared.chat">source on GitHub</a></span>
+    <span>More from adam.inc · <a href="https://adam.gives">the menu ↗</a></span>
   </footer>
 </div>
 

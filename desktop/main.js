@@ -1,9 +1,9 @@
-// beeper.chat desktop — Electron shell.
+// cleared.chat desktop Electron shell.
 // Runs the web/ proxy server IN this process (Electron's own Node) via dynamic
 // import, then opens a window to it. Works both in dev (npm start) and when
 // packaged by electron-builder.
 
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -12,12 +12,15 @@ const { spawn } = require('node:child_process');
 
 const PORT = process.env.PORT || 4317;
 process.env.PORT = String(PORT);
+app.setPath('userData', path.join(app.getPath('appData'), 'cleared-chat-desktop'));
 
 // Packaged app: load keys from the user's app-data .env if present, so live mode
 // can be configured without touching the install dir. (Dev reads web/.env.)
 if (app.isPackaged) {
-  process.env.SNAPSHOT_DIR = path.join(app.getPath('userData'), 'snapshots');
-  const cfg = path.join(app.getPath('userData'), '.env');
+  const currentData = app.getPath('userData');
+  process.env.SNAPSHOT_DIR = path.join(currentData, 'snapshots');
+  process.env.WA_DATA_DIR = path.join(currentData, 'whatsapp');
+  const cfg = path.join(currentData, '.env');
   if (fs.existsSync(cfg)) {
     for (const line of fs.readFileSync(cfg, 'utf8').split('\n')) {
       const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)\s*$/);
@@ -50,49 +53,70 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 880,
     height: 920,
-    title: 'beeper.chat',
+    title: 'cleared.chat',
     icon: path.join(__dirname, 'build', 'icon.png'),
     autoHideMenuBar: true,
     backgroundColor: '#F8F8F8',
     show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
   });
   win.maximize();
   win.show();
   win.loadURL(`http://localhost:${PORT}/`);
 }
 
-// Beeper Desktop serves the local API this app reads. If it is not running,
-// start it in the background so beeper.chat works without you opening Beeper.
-function apiUp() {
-  return new Promise((resolve) => {
-    const req = http.get('http://127.0.0.1:23373/v0/mcp', (r) => { r.destroy(); resolve(true); });
-    req.on('error', () => resolve(false));
-    req.setTimeout(2500, () => { req.destroy(); resolve(false); });
+function voiceScriptPath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'voice-listen.ps1')
+    : path.join(__dirname, 'voice-listen.ps1');
+}
+
+ipcMain.handle('voice:listen', () => new Promise((resolve, reject) => {
+  const child = spawn('powershell.exe', [
+    '-NoProfile', '-Sta', '-ExecutionPolicy', 'Bypass',
+    '-File', voiceScriptPath(), '-TimeoutSeconds', '22',
+  ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  let out = '', err = '';
+  child.stdout.on('data', (d) => { out += d; });
+  child.stderr.on('data', (d) => { err += d; });
+  child.on('error', reject);
+  child.on('close', (code) => {
+    const transcript = out.trim();
+    if (code === 0 && transcript) resolve({ transcript });
+    else if (code === 2) resolve({ transcript: '', timeout: true });
+    else reject(new Error(err.trim() || 'Speech recognition did not return text.'));
   });
-}
-function findBeeperExe() {
-  const local = process.env.LOCALAPPDATA || '';
-  const cands = [
-    process.env.BEEPER_EXE,
-    path.join(local, 'Programs', 'BeeperTexts', 'Beeper.exe'),
-    path.join(local, 'Programs', 'Beeper', 'Beeper.exe'),
-  ].filter(Boolean);
-  return cands.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
-}
-async function ensureBeeper() {
-  if (await apiUp()) return;
-  const exe = findBeeperExe();
-  if (!exe) return; // can't find it; the app will show the connect-Beeper message
-  try { spawn(exe, [], { detached: true, stdio: 'ignore' }).unref(); } catch {}
-  for (let i = 0; i < 80; i++) { // wait up to ~40s for Beeper's API to come up
-    await new Promise((r) => setTimeout(r, 500));
-    if (await apiUp()) return;
-  }
+}));
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  // Another copy is already running. Hand focus to it and exit quietly.
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    const [win] = BrowserWindow.getAllWindows();
+    if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
+  });
 }
 
 app.whenReady().then(async () => {
-  await ensureBeeper();
-  try { await startServer(); } catch (e) { console.error('server start error:', e); }
+  if (!gotLock) return;
+  try {
+    await startServer();
+  } catch (e) {
+    if (e && e.code === "EADDRINUSE") {
+      // Something already owns the port. The UI still works against it.
+      console.error(`port ${PORT} already in use; attaching to the existing server`);
+    } else {
+      console.error("server start error:", e);
+    }
+  }
   waitForServer(createWindow);
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

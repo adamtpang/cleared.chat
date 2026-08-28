@@ -1,0 +1,31 @@
+# repos.yaml v0 — see github.com/adamtpang/repo-connect
+repo: cleared.chat
+is: A private, WhatsApp-first messaging inbox that syncs directly, ranks every open loop by importance x urgency, transcribes voice notes, and prepares editable drafts without sending.
+url: https://cleared.chat
+cluster: triage-core
+
+provides:
+  - id: triage-brain
+    what: the human-in-the-loop triage skill (Rule 0, scoring, drafting) run via /cleared
+    at: .claude/skills/cleared/SKILL.md
+  - id: triage-scoring-rubric
+    what: importance x urgency (1-25) plus age boost, the shared rubric sprite.email ported into its own triage-score.ts
+    at: docs/scoring.md
+  - id: cleared-local-server
+    what: zero-dependency Node proxy with fetchInbox, rankPrompt scoring, chatPrompt drafting, a human-only send boundary, and runClaudeCli for subscription-first LLM billing
+    at: web/server.mjs
+  - id: voice-rules
+    what: draft voice rules (no em dashes, no emojis, never needy, never AI-sounding) referenced by sprite.email's own draft work
+    at: me.md
+
+stack: [node, vanilla-js, electron]
+
+kin:
+  - repo: sprite.email
+    why: same triage pipeline shape (score and draft, with the human always sending manually) for a different inbox. Messaging is here, Gmail is there. sprite.email already documents this bridge in its own SIBLING_BEEPER_CHAT.md; this is the reciprocal edge. sprite.email has the stronger multi-account source layer, cleared.chat has the stronger scoring/drafting/Rule-0 layer. Converging means each adopts the other's strong half, per the shared TriageCore contract sketched in that doc.
+  - repo: pokedex.life
+    why: cleared.chat can read real-world physical-presence signals from active local community conversations that pokedex.life's Farcaster-only Specimen model has no equivalent source for. Useful for its tend layer, not just its read layer.
+  - repo: deathmoney.fyi
+    why: cleared.chat surfaces payment conversations and people-context, while deathmoney.fyi is the private money ledger and verification workflow. Messages can identify a payment loop, but deathmoney.fyi is the source of truth before any amount is treated as owed or sent.
+
+canon: none - SIBLING_BEEPER_CHAT.md lives in sprite.email as the bridge doc; this repo links back to it rather than duplicating it

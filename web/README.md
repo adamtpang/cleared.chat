@@ -1,50 +1,39 @@
-# beeper.chat web (MVP)
+# cleared.chat local app
 
-Open this each morning instead of digging through Beeper: it reads your inbox,
-ranks every chat by **importance × urgency**, and shows your daily action items
-with replies drafted in your voice. Nothing sends on its own.
+The local server merges connected message sources into one inbox, ranks open
+loops, drafts replies, and serves the desktop interface.
 
-This is the web MVP of the [beeper.chat](../) idea (the `/beeper` Claude Code
-skill is the same brain, this is a persistent UI). Built to graduate into a
-Tauri desktop app later.
-
-## Run it (demo, zero setup)
-
-No dependencies, no build step:
-
-```
-cd web
-node server.mjs
+```powershell
+npm install
+npm test
+npm run dev
 ```
 
-Open http://localhost:4317 and click **Run triage**. It loads sample data so you
-can see the UX immediately.
+Open `http://127.0.0.1:4317`. Real mode is the default. Pair WhatsApp from
+Settings, then select **Start voice triage**.
 
-## Go live (your real inbox)
+The local browser build reads the source files directly, so it does not need a
+new Windows installer after each change. Refresh the browser after interface
+changes. Restart `npm run dev` only after server-side changes.
 
-1. Make sure **Beeper Desktop** is running (it serves the local API on
-   `127.0.0.1:23373`).
-2. `cp .env.example .env`
-3. Set `ANTHROPIC_API_KEY`. Get `BEEPER_ACCESS_TOKEN` in Beeper Desktop:
-   Settings -> Integrations -> Approved connections -> + (create a token), then
-   paste it in. Set `DEMO=0`.
-4. `node server.mjs` and click **Run triage**.
+For the recommended pairing flow, select **Show QR**, then open WhatsApp on the
+phone and select **Linked Devices > Link a Device** to scan it. The phone needs
+an active WhatsApp session but does not need a functioning SIM for the scan.
+Phone-number pairing is available under **Phone number code, currently
+unreliable**, but current WhatsApp protocol changes can cause Baileys to display
+a code before WhatsApp has accepted it. Prefer QR pairing and do not repeatedly
+retry a rejected phone-number code.
 
-## How it works
+The browser never receives source credentials. Direct WhatsApp credentials and
+message history stay local. Ranking and drafting use the Claude Code CLI by
+default, with optional Anthropic API and Grok CLI backends.
 
-```
-browser UI  ->  local Node proxy (holds your keys)  ->  Beeper local API (read + act)
-                                                     ->  Claude API (rank + draft)
-```
+Set `DEMO=1` for sample conversations. Copy `.env.example` only when you need to
+change a backend or enable an optional source.
 
-- The proxy keeps your keys off the browser. No data leaves your machine except
-  the chat text sent to the Claude API for ranking.
-- Because Beeper has no native reorder, the ranked order lives here; the
-  per-card actions (archive, etc.) use Beeper's real write endpoints.
+Email is opt-in with `EMAIL_ENABLED=1`. The default sweep contains active
+messaging chats only and ignores WhatsApp Archive.
 
-## Status
-
-Demo mode works now. Live mode uses the confirmed Beeper REST endpoints
-(`GET /v1/chats/search?inbox=primary`, `GET /v1/chats/{id}/messages`,
-`PATCH /v1/chats/{id}` for archive/pin/low-priority) with a Bearer token. A
-desktop wrapper lives in `../desktop` (Electron) so it opens as a real app.
+Received voice notes are transcribed locally and included in triage context.
+Install the local engine once with `python -m pip install faster-whisper`.
+Messaging sources remain read-only. Drafts are copied and sent manually.

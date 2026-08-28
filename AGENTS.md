@@ -1,49 +1,52 @@
-# AGENTS.md
+<!-- BEGIN:summon-standard -->
+Summon standard: this company must pass the six readiness gates in `summon.company/SUMMON_COMPANY_STANDARD.md` (Outcome, Evidence, Workspace, Organization, Skills, Runtime). Read `NORTH_STAR.md`, `EVIDENCE.md`, `company/ORGANIZATION.md`.
+<!-- END:summon-standard -->
 
-Guidance for Codex working in this repo.
+<!-- BEGIN:grok-chat-continuation -->
+Grok chat continuation: read `GROK_CONTINUE_FROM_CLAUDE.md` and/or `GROK_CONTINUE_FROM_CODEX.md` when resuming in Grok. Refresh with `node .grok/sync-to-grok.js` from Aether root.
+<!-- END:grok-chat-continuation -->
 
-## What this is
+<!-- BEGIN:claude-chat-continuation -->
+Claude chat continuation: read `CODEX_CONTINUE_FROM_CLAUDE.md` to resume from the latest local Claude Code sessions for this project.
+<!-- END:claude-chat-continuation -->
 
-beeper.chat is a **Codex skill** that clears the user's Beeper inbox to
-zero each day. There is no build step, no server, no test runner — the
-deliverable is the skill plus its supporting docs and data templates.
+# cleared.chat
 
-The brain is **`.Codex/skills/beeper/SKILL.md`**. Read it before changing
-behavior. Run it with `/beeper`.
+Read `CLAUDE.md` before making changes. It is the live source of truth for the
+current architecture, constraints, and handoff state.
 
-## The one rule
+## Product
 
-The Beeper MCP token has **write** scope. **Never** send, reply, react, archive,
-or mark-read on Beeper without the user's explicit per-action OK. Drafting is
-fine; mutating is not. This rule lives in SKILL.md "Rule 0" and must survive any
-edit.
+cleared.chat is a local-first messaging client. Direct WhatsApp sync is the
+primary source. The app ranks open loops, transcribes voice notes, asks for
+missing context, and prepares editable drafts. The human always performs the
+final communication action.
 
-## How it works (data flow)
+## Communication safety
 
-1. `beeper` MCP (local, `http://127.0.0.1:23373`) → unread chats across all
-   networks.
-2. Score each by **importance × urgency** (rubric in SKILL.md, examples in
-   `docs/scoring.md`), classify as REPLY / TASK / NOISE.
-3. Present top chat first as a context bundle, pulling facts from `kb/<slug>.md`
-   and voice from `me.md`.
-4. Act only on the user's OK; send via the Beeper send tool.
-5. Update `kb/<slug>.md`; log tasks to `tasks.md`.
+- Never send, reply, react, archive, mark read, post, email, DM, or otherwise
+  communicate externally as Adam.
+- This rule remains absolute even if Adam says `send`, says `yes`, or approves
+  exact wording.
+- Reading context, drafting, revising, copying, and presenting text are allowed.
+- Never publish or expose Adam's private information.
 
-## Conventions
+## Runtime
 
-- **Person-KB is plain Markdown**, one file per contact, slug filename
-  (lowercase-kebab). Chosen over JSON/SQLite so it's human-readable,
-  diff-friendly, and writable with normal file tools. Template: `kb/_template.md`.
-- **Private data stays out of git**: `kb/*` (except README + template), `me.md`,
-  `tasks.md` are gitignored. The shareable scaffold (skill, docs, templates) is
-  what gets committed — this is built in public.
-- Don't hardcode Beeper MCP tool names; discover them at runtime (they vary by
-  version) and prefer read/list/search tools.
-- Beeper MCP is **local only** — features here cannot run in a cloud/remote
-  session; they need Beeper Desktop running on the user's machine.
+- `web/server.mjs`: local API, aggregation, ranking, drafts, and snapshots.
+- `web/whatsapp.mjs`: direct WhatsApp pairing, sync, and private local store.
+- `web/public/index.html`: two-pane inbox and voice-guided review.
+- `desktop/main.js`: Electron shell.
+- `docs/scoring.md`: importance x urgency rubric.
 
-## Related
+## Private state
 
-Sibling product `../sprite.email` is a separate Next.js web app for Gmail
-triage (no shared code today). beeper.chat and sprite.email share only the
-*concept* of importance/urgency triage, not a library.
+WhatsApp credentials, local message stores, exports, snapshots, `.env`, `me.md`,
+`tasks.md`, and personal `kb/` records never enter git or deployment artifacts.
+The Vercel deployment is limited by `.vercelignore` to the public landing page.
+
+## Browser preference
+
+Adam uses Helium, not Chrome. For authenticated browser work, use
+`C:\Users\adamp\Aether\helium-harness`. Do not launch Chrome unless Adam
+explicitly requests it.

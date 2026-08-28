@@ -1,8 +1,8 @@
 {
-  "name": "beeper-chat-desktop",
-  "version": "0.1.0",
+  "name": "cleared-chat-desktop",
+  "version": "0.5.2",
   "private": true,
-  "description": "Desktop app for beeper.chat — opens your importance x urgency inbox in its own window.",
+  "description": "A standalone WhatsApp-first voice inbox with task planning and unsent drafts",
   "author": "Adam Pangelinan",
   "main": "main.js",
   "scripts": {
@@ -15,8 +15,8 @@
     "sharp": "^0.35.2"
   },
   "build": {
-    "appId": "chat.beeper.triage",
-    "productName": "beeper.chat",
+    "appId": "chat.cleared.desktop",
+    "productName": "cleared.chat",
     "directories": {
       "output": "dist"
     },
@@ -26,21 +26,41 @@
         "to": "web",
         "filter": [
           "**/*",
+          "**/node_modules/**/*",
           "!**/.env",
-          "!**/node_modules/**"
+          "!**/.license.json",
+          "!wa-auth*/**",
+          "!snapshots/**",
+          "!wa-store.json"
         ]
+      },
+      {
+        "from": "voice-listen.ps1",
+        "to": "voice-listen.ps1"
       }
     ],
     "win": {
       "icon": "build/icon.png",
       "target": [
         "nsis"
-      ]
+      ],
+      "legalTrademarks": ""
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
-    }
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "cleared.chat",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "include": "installer.nsh"
+    },
+    "afterPack": "./afterPack.cjs",
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ]
   }
 }

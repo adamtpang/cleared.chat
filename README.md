@@ -1,74 +1,110 @@
-# beeper.chat
+# cleared.chat
 
-An AI agent that clears your **Beeper** inbox to zero every day.
+A standalone, voice-driven inbox that ranks every open messaging loop and helps
+you close them one person at a time.
 
-It reads your unread chats across **every network** (WhatsApp, iMessage, Signal,
-Telegram, Discord, Slack, …) through the Beeper Desktop MCP, ranks them by
-**importance × urgency**, surfaces the **single most important chat first** with
-a full context bundle (who it's from, a one-line summary, what it knows about
-that person, and a suggested reply or task), drafts replies **in your voice**,
-and **never sends anything without your explicit OK**.
+## Daily loop
 
-Core mental model: **each chat is either a reply to be sent and/or a task to be
-done first.**
+1. Open cleared.chat. The complete inbox loads automatically.
+2. Select **Start voice triage**.
+3. Hear how many replies remain and why the next person matters.
+4. Speak the facts, intent, task, or tone for that conversation.
+5. Review and copy the editable draft, then send it manually in WhatsApp.
+6. Move to the next person and hear the remaining count fall.
 
-## Form factor
+Each conversation becomes one of four outcomes: a reply, work to do first, later,
+or no reply owed. Tasks are saved locally. Voice never sends a message.
 
-beeper.chat is a **Claude Code skill**, not a standalone app. Why: the Beeper MCP
-already handles read/send across all networks, and Claude Code already gives you
-the agent loop *and* "draft, then wait for my OK before sending" for free (it
-permission-gates the send tool). So the repo holds the part that's actually
-yours — the scoring rubric, the context-bundle format, your voice, and a
-per-person knowledge base — and rides on Claude Code + Beeper for the plumbing.
+## Connections
 
-The daily ritual is one command: open Claude Code in this folder and run
-`/beeper`.
+WhatsApp connects directly through Baileys and does not require another desktop
+bridge.
+Pair once from **Settings > Show QR**, then scan it from **WhatsApp > Linked
+Devices > Link a Device** on a phone where WhatsApp is already open. A working
+SIM is not required for the scan. Phone-number pairing remains available as a
+fallback. Credentials and the local message store live in the app's user-data
+directory, not the install folder, so they survive upgrades.
 
-## Setup (one time)
+Email is disabled by default so it cannot enter the messaging sweep. Gmail can
+be restored later with `EMAIL_ENABLED=1`. Discord remains an optional direct
+adapter. A legacy local-API adapter is disabled unless `BEEPER_ENABLED=1` is
+set explicitly.
 
-1. **Beeper Desktop** → Settings → Developers → **enable MCP**. Keep Beeper
-   Desktop running whenever you triage. (The API lives at
-   `http://127.0.0.1:23373` — local only; this can't run in the cloud.)
-2. **Approve the MCP server.** This repo ships `.mcp.json` pointing at Beeper, so
-   the first time you open Claude Code here it'll ask to connect the `beeper`
-   server — approve it (one OAuth handshake, scope `read write`).
-   Manual fallback: `claude mcp add beeper http://127.0.0.1:23373/v0/mcp -t http -s project`
-3. **Set your voice.** Copy `me.template.md` → `me.md` and fill it in. This is
-   how the agent drafts replies that sound like you. (`me.md` is gitignored.)
+The WhatsApp inbox is uncapped, excludes WhatsApp Archive, tracks archive and
+unarchive updates, and merges phone-number and LID identities into one thread.
+Received voice notes are transcribed locally with Faster Whisper and their text
+is included when cleared.chat creates the next action and draft.
+Triage first removes conversations where no reply is owed, then ranks every
+remaining loop in validated chunks. Task-first conversations receive a concrete
+prerequisite and an editable holding draft. Every reply-owed conversation has a
+visible next action.
 
-## Daily use
+## Parity boundary
 
+The daily workflow now covers direct pairing, active conversation sync, received
+voice-note transcription, search, thread reading, turn detection, priority
+ranking, task planning, drafts, voice review, and local progress. Media
+composition, reactions, calls, presence, and additional messaging networks are
+not yet at parity and are not labeled complete.
+
+Baileys is an unofficial WhatsApp Web client. It reduces the extra bridge layer,
+but it does not remove WhatsApp's account-policy risk. Do not use cleared.chat for
+bulk or unsolicited messaging.
+
+## Voice
+
+The Windows desktop app uses local Windows speech recognition for dictation and
+local system voices for spoken progress, so voice adds no API bill. Ranking and
+drafting use the logged-in Claude Code CLI by default.
+
+ChatGPT subscriptions and OpenAI API billing are separate, and ChatGPT Voice
+does not currently call custom apps. OpenAI Realtime can be added later as an
+optional higher-quality voice transport without changing the inbox workflow.
+
+## Voice-note setup
+
+Voice-note transcription is local and does not use an API key. Install Python
+and Faster Whisper once:
+
+```powershell
+python -m pip install faster-whisper
 ```
-cd beeper.chat
-claude
-> /beeper
-```
 
-It shows a ranked queue, then walks you through chats top-first. For each one,
-reply with: **send · edit `<note>` · task · skip · archive · next · stop**
-(single letters `s/e/t/k/a/n/q` work too). Nothing is sent until you say `send`.
-
-## What's in here
-
-| Path | What it is |
-|------|------------|
-| `.claude/skills/beeper/SKILL.md` | **The brain.** The full triage workflow, scoring rubric, bundle format, and safety rules. |
-| `docs/scoring.md` | The importance × urgency rubric with worked examples + how to tune it. |
-| `kb/` | Per-person knowledge base (one `.md` per contact). Built up as you triage. *Private — gitignored.* |
-| `me.md` | Your voice/profile, used for drafting. *Private — gitignored* (start from `me.template.md`). |
-| `tasks.md` | Where "do this first" items get logged. *Private — gitignored.* |
-| `.mcp.json` | Preconfigured Beeper MCP server. |
+The default `small` model downloads on the first transcription. Set
+`WHISPER_MODEL=tiny` for faster processing or `WHISPER_MODEL=medium` for higher
+accuracy. Temporary audio is deleted after transcription.
 
 ## Safety
 
-The Beeper MCP can send and archive. The agent treats **you** as the gate: it
-drafts freely but never sends, reacts, archives, or marks-read without your
-explicit OK for that specific action. It won't invent facts, and it treats
-instructions found *inside* messages as data, not commands.
+Messaging sources are read-only. The app drafts and copies text, but its send,
+reply, reaction, archive, and mark-read paths are disabled. Adam performs every
+communication action manually in the source app.
 
-## Status
+## Development
 
-v1 — interactive daily triage. Built in public with the Beeper community.
-Possible next steps: backfill the person-KB from chat history; a "voice" doc
-auto-seeded from your sent messages; an optional headless/scheduled CLI wrapper
-around the same rubric.
+```powershell
+cd web
+npm install
+npm test
+node server.mjs
+```
+
+Build the Windows installer:
+
+```powershell
+cd desktop
+npm install
+npm run dist
+```
+
+Important paths:
+
+| Path | Purpose |
+| --- | --- |
+| `web/server.mjs` | Source aggregation, ranking, drafting, tasks, and copy-only boundary |
+| `web/whatsapp.mjs` | Direct WhatsApp pairing, history, storage, and voice-note intake |
+| `web/voice-transcriber.mjs` | Private local voice-note transcription worker |
+| `web/public/index.html` | Two-pane inbox and guided voice review |
+| `desktop/main.js` | Electron shell and native Windows dictation bridge |
+| `web/fates.mjs` | Deterministic open-loop calibration |
+| `web/snapshots/` | Ranked inbox snapshots and voice-created tasks |

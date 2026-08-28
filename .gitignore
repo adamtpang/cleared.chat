@@ -7,6 +7,8 @@
 
 # Node (in case a CLI wrapper is added later)
 node_modules/
+__pycache__/
+*.pyc
 .env
 .env.*
 !.env.example
@@ -19,6 +21,29 @@ Thumbs.db
 
 # build output (electron-builder)
 dist/
+desktop/dist/
+desktop/release/
+desktop/out/
+desktop/cleared-chat-*.png
 
 # triage snapshots (private inbox data)
 snapshots/
+
+# Live UI verification can contain private chat content
+.brand-preview/
+
+# Local agent handoffs and one-off private exports
+*_CONTINUE_FROM_*.md
+.claude/launch.json
+.claude/settings.json
+web/inbox-triage-result.json
+web/export-eddie.mjs
+
+# our own WhatsApp session (Baileys pairing) — never commit
+web/wa-auth/
+web/wa-auth-2/
+web/wa-auth-3/
+web/wa-store.json
+
+# activated license state — local to this machine, never commit
+web/.license.json

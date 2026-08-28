@@ -2,3 +2,6 @@
 # Keep the skill, docs, and private data (me.md, tasks.md, kb/) off the web.
 *
 !index.html
+!icon.svg
+!robots.txt
+!sitemap.xml

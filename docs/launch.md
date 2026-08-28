@@ -1,89 +1,48 @@
 # Launch content
 
-Ready-to-post copy for beeper.chat. Voice: lowercase, confident, specific, no em
-dashes, no emojis. Posting is the user's call (Rule 0 covers Beeper; identity
-covers X/HN/Reddit). Nothing here is auto-posted.
+Copy-ready launch material for cleared.chat. Nothing here is posted
+automatically.
 
----
+## Short post
 
-## X / Twitter, build-in-public thread
+my WhatsApp inbox became an unprioritized task list. important promises, money,
+family, and people waiting on me were mixed in with everything else.
 
-**1/**
-my beeper inbox had 100+ unread across whatsapp, imessage, signal, telegram and
-discord. i kept answering the loudest chats instead of the ones that mattered,
-and it never hit zero. so i built beeper.chat: an open-source AI that clears the
-whole thing to zero by importance, not recency.
+so i built cleared.chat. it syncs WhatsApp directly, figures out whose turn it
+is, ranks every open loop by importance x urgency, transcribes voice notes, and
+gives each reply-owed chat one next action and an editable draft.
 
-**2/**
-it reads every unread chat across every network through beeper's local API,
-scores each one importance x urgency from 1 to 25, and sorts it into one move:
-reply, task, or noise. a partner's one-word text outranks a vendor's URGENT!!!
-blast.
+it never sends. i review, copy, and send manually.
 
-**3/**
-then it drafts the reply in my voice and hands it back to me. i send, edit, or
-skip. rule 0: it never sends, reacts, or archives without my explicit ok. it
-drafts, i'm always the last click.
-
-**4/**
-the part i care about most: it runs locally on your own claude subscription. no
-per-message api bill, no data leaving your machine. your chats stay on your box.
-
-**5/**
-it's a claude code skill plus a small local app. clone it, point it at beeper
-desktop, run /beeper. free and open source, built in public with the beeper
-community.
-github.com/adamtpang/beeper.chat
-beeper.chat
-
----
+https://cleared.chat
+https://github.com/adamtpang/cleared.chat
 
 ## Show HN
 
-**Title** (under 80 chars):
-Show HN: beeper.chat, inbox zero for Beeper ranked by importance x urgency
+**Title:** Show HN: cleared.chat, a priority queue for your WhatsApp open loops
 
 **Body:**
-I use Beeper to unify WhatsApp, iMessage, Signal, Telegram and Discord into one
-inbox, but I kept answering the loudest chats instead of the ones that mattered,
-and it never hit zero.
 
-beeper.chat is a Claude Code skill plus a small local app that clears it. It
-reads every unread chat through Beeper Desktop's local API, scores each one on
-importance x urgency from 1 to 25, and classifies it as a reply to send, a task
-to do first, or noise. It surfaces the most important chat first with a reply
-drafted in my voice.
+My WhatsApp inbox had become an unprioritized task list. Recency was deciding
+what I answered, so important people and promises were easy to miss.
 
-Two design choices I care about:
+cleared.chat is a local-first app that connects directly to WhatsApp through a
+linked-device session. It identifies whose turn it is, scores open loops by
+importance x urgency, transcribes received voice notes, and classifies each
+conversation as reply now, do a task first, handle later, or no reply owed.
 
-- It never sends, reacts, or archives without my explicit OK. It drafts; I'm the
-  last click.
-- It runs on your own Claude subscription via Claude Code, so there's no
-  per-message API bill, and your chats never leave your machine.
+When facts or intent are missing, it asks one question before drafting. When the
+context is sufficient, it prepares an editable reply in the user's voice. The
+agent never sends or changes messages. The human reviews, copies, and sends in
+WhatsApp.
 
-It's free and open source. Clone it, point it at Beeper Desktop, run /beeper.
+The app and message store run locally. Model-assisted ranking and drafting use
+the configured model provider, so users should review that provider's privacy
+terms before enabling it.
 
-Repo: https://github.com/adamtpang/beeper.chat
-Site: https://beeper.chat
+Repo: https://github.com/adamtpang/cleared.chat
 
-Would love feedback, especially from other Beeper users, on the scoring rubric
-and what "importance" should mean.
+Site: https://cleared.chat
 
----
-
-## Beeper community (Matrix) + r/beeper
-
-built something for fellow beeper power users: beeper.chat, an open-source claude
-code skill that clears your inbox to zero by importance x urgency instead of
-recency.
-
-it reads every unread chat across all your networks through the local beeper
-API, scores each one 1 to 25, sorts into reply / task / noise, and drafts the
-reply in your voice. it never sends without your explicit ok, and it runs on
-your own claude subscription so there's no api bill.
-
-repo: github.com/adamtpang/beeper.chat
-site: beeper.chat
-
-would love your feedback on the scoring rubric and whether the local-API
-approach holds up on your setup.
+I would value feedback on turn detection, direct-sync reliability, and which
+signals should dominate importance.
