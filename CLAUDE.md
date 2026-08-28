@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `f566d40`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `51d32ba`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -40,12 +40,13 @@ inbox automatically. Do not stop polling immediately at `historyStatus:
 complete`; WhatsApp can deliver its final chat batch after that state first
 appears.
 
-The header's primary action is `Triage inbox`. There is no voice-triage button
-in the header. Triage checks every active, unarchived WhatsApp conversation
-where the other person spoke last or Adam still has an open promise. Do not use
-the Baileys unread count as the triage boundary because companion history can
-undercount it. The hosted account currently reports 6 unread flags but produces
-45 clear reply-owed actions from the complete active store.
+The app opens to a WhatsApp-style `Unread` queue. `Sync unread` rebuilds the
+queue from a fresh, read-only WhatsApp app-state snapshot, then live Baileys
+updates keep it current. A production refresh on 2026-08-28 returned 31 active
+unread chats. The header's primary ranking action is `Triage inbox`. There is
+no voice-triage button in the header. Triage still checks every active,
+unarchived WhatsApp conversation where the other person spoke last or Adam
+still has an open promise because unread and reply-owed are different sets.
 
 Actionable triage rows expose a `Solved` control. It writes only private
 cleared.chat state in `solved-chats.json`; it never archives, marks read, sends,
@@ -69,6 +70,13 @@ voice notes are transcribed locally as they arrive. A conversation with stored
 voice notes exposes `Voice transcripts .md`, which downloads a received-only
 Markdown file with timestamps, durations, statuses, and transcript text. Sent
 voice notes and unrelated message text are excluded from that export.
+
+Baileys history snapshots use absolute unread counts, while live
+`chats.update` events use `-1` for mark unread, `0` for read, and positive
+deltas for newly received messages. Keep those merge paths separate. On-demand
+app-state replay must use non-initial mode so read-state mutations are not held
+behind Baileys' temporary history-range guards. An empty replay rolls back to
+the previous local unread set.
 
 ## The one rule
 
