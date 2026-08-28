@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `4c50b1c`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `863cee1`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -63,7 +63,9 @@ queues after a newer message. It never changes WhatsApp read state.
 Reply drafts use one editable review modal. For a synced WhatsApp conversation,
 Adam's direct click on `Send reply` sends the exact recipient and text shown in
 that modal. The endpoint rejects unconfirmed, invalid, or unknown recipients and
-deduplicates repeated request IDs. Non-WhatsApp drafts remain copy-only.
+deduplicates repeated request IDs. Pressing Enter in the composer opens this
+review modal; Shift+Enter inserts a line break. Non-WhatsApp drafts remain
+copy-only.
 
 WhatsApp protocol, key-distribution, history-sync, and app-state events are
 control traffic. `web/whatsapp.mjs` drops them at ingestion and removes old
