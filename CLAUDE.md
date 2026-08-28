@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `912b054`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `f566d40`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -62,6 +62,13 @@ WhatsApp supplies usable names for most contacts, but some direct chats arrive
 as numbers only because companion sync does not include the phone address book.
 The UI offers `Name contact` for those chats. Aliases are private per-account
 state in `contact-aliases.json` and must remain outside git and image builds.
+
+Unread chat rows follow WhatsApp's visual hierarchy: bold contact and preview,
+primary-color time, then a circular message-count badge. Received WhatsApp
+voice notes are transcribed locally as they arrive. A conversation with stored
+voice notes exposes `Voice transcripts .md`, which downloads a received-only
+Markdown file with timestamps, durations, statuses, and transcript text. Sent
+voice notes and unrelated message text are excluded from that export.
 
 ## The one rule
 
