@@ -514,9 +514,9 @@
     .app-shell{grid-template-columns:minmax(0,1fr);grid-template-rows:56px minmax(0,1fr)}
     .topbar{gap:var(--space-2x)}
     .topbar>div:last-child{gap:6px!important;min-width:0}
-    .topbar .uictl,.topbar #loadall,.topbar #run{display:none!important}
-    .topbar #voicebtn{font-size:0;padding-inline:12px;white-space:nowrap}
-    .topbar #voicebtn::after{content:"Voice";font-size:12px}
+    .topbar .uictl,.topbar #loadall{display:none!important}
+    .topbar #run{font-size:0;padding-inline:12px;white-space:nowrap}
+    .topbar #run::after{content:"Triage";font-size:12px}
     .sidebar{grid-column:1;grid-row:2;border-right:0;max-height:none}
     .chatpane{display:none;grid-column:1;grid-row:2}
     body.conversation-open .sidebar{display:none}
@@ -552,8 +552,7 @@
       <a class="act" id="accountbtn" href="/account" title="Account" hidden>Account</a>
       <button class="act" onclick="openSettings()" title="Settings">Settings</button>
       <button class="act" id="loadall" onclick="loadEverything()" hidden>Reload everything</button>
-      <button class="act" id="run" onclick="runTriage()" hidden>Run triage</button>
-      <button class="btn" id="voicebtn" onclick="startVoiceReview()">Start voice triage</button>
+      <button class="btn" id="run" onclick="runTriage()" title="Rank unread WhatsApp chats by importance and urgency">Triage inbox</button>
     </div>
   </header>
 
@@ -1317,9 +1316,6 @@
 
   function setVoiceQueue(items){
     VOICE_QUEUE = (items || []).filter(it => !isVoiceHandled(it));
-    const b = $('#voicebtn');
-    b.textContent = VOICE_QUEUE.length ? 'Start voice triage, ' + voiceProgressLabel() : 'Start voice triage';
-    b.disabled = false;
   }
 
   function voiceCurrent(){ return VOICE_QUEUE[0] || null; }
@@ -1403,7 +1399,6 @@
       delete window.__items[done.chatId];
       renderFates(Object.values(window.__items), window.__eightyTwenty);
     }
-    $('#voicebtn').textContent = VOICE_QUEUE.length ? 'Start voice triage, ' + voiceProgressLabel() : 'Start voice triage';
     await showVoiceCurrent(true);
   }
 
@@ -1900,7 +1895,7 @@
       }
     }catch(e){ $('#err').innerHTML = '<div class="err">'+esc(String(e.message||e))+'</div>'; }
     endProg();
-    b.disabled = false; b.textContent = 'Refresh';
+    b.disabled = false; b.textContent = 'Triage inbox';
   }
   const pill = (n,l) => '<div class="pill"><b>'+n+'</b> '+l+'</div>';
 
