@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `5f6576a`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `bba5c2e`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -104,6 +104,14 @@ countdown. WhatsApp media recovery retries once after 30 seconds and fails with
 specific advice after 90 seconds. A Whisper worker that stops reporting progress
 also fails after 90 seconds. The failure reason stays visible inside the retry
 control. The status endpoint never returns audio or transcript text.
+
+When WhatsApp cannot return expired media, the failed note offers two paths:
+`Retry from WhatsApp` and `Upload audio file`. Direct upload accepts OGG, Opus,
+M4A, MP3, WAV, and other audio MIME types up to WhatsApp's 16 MB media limit. It
+routes the file into that account's private transcription worker and replaces
+the unavailable transcript on the original message. The hosted gateway raises
+its request-body limit only for this upload route. Agents and tests must never
+select, inspect, or upload a user's private media.
 
 The cloud gateway also contains a credential-gated WhatsApp Business Platform
 transcript bot at `/api/meta/whatsapp/webhook`. This is a separate Cleared
