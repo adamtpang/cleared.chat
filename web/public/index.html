@@ -189,6 +189,8 @@
   .voice-note-label{display:flex;align-items:center;gap:7px;margin-bottom:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)}
   .voice-note-label::before{content:"";width:8px;height:8px;border:2px solid currentColor;border-radius:var(--r-full);box-shadow:3px 0 0 -1px currentColor}
   .voice-note-text{white-space:pre-wrap}
+  .voice-retry{margin-top:7px;border:1px solid currentColor;border-radius:var(--r-sm);background:transparent;color:inherit;font:600 11px/1 var(--font);padding:7px 9px;cursor:pointer}
+  .voice-retry:disabled{opacity:.55;cursor:default}
   /* shrink-to-ellipsis rather than flex:none - a Gmail label carries the
      account address, which is long enough to push the row off-screen */
   .kindtag{font-size:10px;font-weight:700;letter-spacing:.03em;padding:2px 6px;border-radius:var(--r-sm);flex:0 1 auto;min-width:0;max-width:40%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1940,22 +1942,49 @@
 
   function messageBubble(m){
     const voice = m.kind === 'voice';
+    const voiceStatus = String(m.transcriptionStatus || '');
     let text = String(m.transcript || m.text || '');
     text = text.replace(/^\[Voice note transcript\]\s*/i, '');
     if(voice && /^\[voice note,/i.test(text)){
-      text = ['pending','transcribing'].includes(m.transcriptionStatus)
-        ? 'Transcribing locally'
-        : 'Transcript unavailable';
+      if(voiceStatus === 'recovering') text = 'Recovering audio from WhatsApp';
+      else if(['pending','transcribing'].includes(voiceStatus)) text = 'Transcribing locally';
+      else if(voiceStatus === 'empty') text = 'No speech detected';
+      else text = 'Transcript unavailable';
     }
     const voiceLabel = voice
       ? '<div class="voice-note-label">Voice note'+(m.seconds ? ' · '+Math.floor(m.seconds/60)+':'+String(Math.round(m.seconds%60)).padStart(2,'0') : '')+'</div>'
       : '';
     const timestamp = messageTime(m.timestamp);
     const metadata = [m.isSender ? 'you' : (m.senderName || ''), timestamp].filter(Boolean).join(' · ');
+    const retry = voice && voiceStatus === 'failed' && m.key
+      ? '<button class="voice-retry" onclick="retryVoiceTranscript(event,'+jsq(openId)+','+jsq(m.key)+',this)">Retry transcript</button>'
+      : '';
     return '<div class="bubble '+(m.isSender?'me':'them')+(voice?' voice-note':'')+'">'
       + voiceLabel + '<div class="'+(voice?'voice-note-text':'')+'">'+esc(text)+'</div>'
+      + retry
       + '<div class="bmeta" title="'+attr(messageDateTitle(m.timestamp))+'">'+esc(metadata)+'</div>'
       + '</div>';
+  }
+
+  async function retryVoiceTranscript(event, chatId, messageId, button){
+    event.stopPropagation();
+    button.disabled = true;
+    button.textContent = 'Recovering audio';
+    try{
+      const response = await fetch('/api/wa/voice/retry', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({chatId, messageId})
+      });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Could not recover this voice note.');
+      await openChat(chatId);
+    }catch(error){
+      button.disabled = false;
+      button.textContent = 'Retry transcript';
+      button.title = String(error.message || error);
+      $('#err').innerHTML = '<div class="err">'+esc(String(error.message || error))+'</div>';
+    }
   }
 
   function backToChats(){

@@ -33,6 +33,7 @@ import {
   resyncUnreadState as resyncWhatsAppUnreadState,
   setContactAlias as setWhatsAppContactAlias,
   sendWhatsAppText,
+  retryVoiceTranscription as retryWhatsAppVoiceTranscription,
 } from './whatsapp.mjs';
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
 import { buildVoiceNotesMarkdown, voiceNoteStats } from './voice-export.mjs';
@@ -1749,6 +1750,13 @@ const server = createServer(async (req, res) => {
         chatId: body.chatId,
         text: body.text,
         requestId: body.requestId,
+      }));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/wa/voice/retry') {
+      const body = await readBody(req);
+      return send(res, 200, await retryWhatsAppVoiceTranscription({
+        chatId: body.chatId,
+        messageId: body.messageId,
       }));
     }
     if (req.method === 'GET' && url.pathname === '/api/wa/status') {

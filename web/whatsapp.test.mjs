@@ -12,6 +12,7 @@ import {
   registerLidMappings,
   toWhatsAppSourceId,
   validateOutboundText,
+  validateVoiceRetryRequest,
   whatsappJid,
 } from './whatsapp.mjs';
 
@@ -48,6 +49,20 @@ test('outbound text rejects non-WhatsApp targets and missing confirmation IDs', 
     chatId: 'wa:60123456789@s.whatsapp.net',
     text: 'hello',
   }), /confirmation request/);
+});
+
+test('voice retry accepts only a synced WhatsApp message identity', () => {
+  assert.deepEqual(validateVoiceRetryRequest({
+    chatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+  }), {
+    jid: '60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+  });
+  assert.throws(() => validateVoiceRetryRequest({
+    chatId: 'gmail:thread-1',
+    messageId: '3EB0123456789ABCDE',
+  }), /WhatsApp conversation/);
 });
 
 test('WhatsApp chat updates preserve archive and inbox state', () => {

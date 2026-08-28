@@ -195,7 +195,8 @@ export function getStatus() {
       unreadMessages: unreadChats.reduce((sum, chat) => sum + Math.max(0, Number(chat.unreadCount) || 0), 0),
       voiceNotes: messages.filter((m) => m.kind === 'voice').length,
       voiceTranscribed: messages.filter((m) => m.kind === 'voice' && m.transcriptionStatus === 'complete').length,
-      voicePending: messages.filter((m) => m.kind === 'voice' && m.transcriptionStatus === 'transcribing').length,
+      voicePending: messages.filter((m) => m.kind === 'voice'
+        && ['pending', 'recovering', 'transcribing'].includes(m.transcriptionStatus)).length,
     },
     transcription: transcriptionStatus(),
   };
@@ -581,22 +582,35 @@ function appendMessage(id, msg) {
 }
 
 const voiceJobs = new Map();
+const voiceRecoveryRequests = new Map();
 const mediaLogger = pino({ level: 'silent' });
+
+async function downloadVoiceAudio(proto) {
+  const reuploadRequest = sock?.updateMediaMessage?.bind(sock);
+  const context = reuploadRequest ? { logger: mediaLogger, reuploadRequest } : undefined;
+  try {
+    return await downloadMediaMessage(proto, 'buffer', {}, context);
+  } catch (error) {
+    const statusCode = Number(error?.status || error?.output?.statusCode || 0);
+    if (![404, 410].includes(statusCode) || !sock?.updateMediaMessage) throw error;
+    const refreshed = await sock.updateMediaMessage(proto);
+    return downloadMediaMessage(refreshed, 'buffer', {}, context);
+  }
+}
 
 function queueVoiceTranscription(jid, proto, stored) {
   const id = String(proto.key?.id || stored.key || 'voice');
   const jobKey = `${jid}:${id}`;
-  if (voiceJobs.has(jobKey) || stored.transcriptionStatus === 'complete') return;
+  if (voiceJobs.has(jobKey)) return voiceJobs.get(jobKey);
+  if (stored.transcriptionStatus === 'complete') return Promise.resolve(stored);
 
   stored.kind = 'voice';
   stored.transcriptionStatus = 'transcribing';
+  stored.transcriptionError = null;
   stored.text = '[voice note, transcribing locally]';
   const job = (async () => {
     try {
-      const audio = await downloadMediaMessage(proto, 'buffer', {}, {
-        logger: mediaLogger,
-        reuploadRequest: sock?.updateMediaMessage,
-      });
+      const audio = await downloadVoiceAudio(proto);
       const result = await transcribeVoiceBuffer(audio, {
         id,
         mimetype: stored.mimetype,
@@ -617,6 +631,77 @@ function queueVoiceTranscription(jid, proto, stored) {
     }
   })();
   voiceJobs.set(jobKey, job);
+  return job;
+}
+
+export function validateVoiceRetryRequest({ chatId, messageId } = {}) {
+  const jid = canonicalWhatsAppJid(whatsappJid(chatId));
+  if (!jid || !/@(?:s\.whatsapp\.net|g\.us|lid)$/.test(jid) || jid === 'status@broadcast') {
+    throw new Error('Choose a synced WhatsApp conversation.');
+  }
+  const id = String(messageId || '').trim();
+  if (!/^[A-Za-z0-9_-]{8,160}$/.test(id)) throw new Error('Choose a valid voice note.');
+  return { jid, messageId: id };
+}
+
+export async function retryVoiceTranscription(input = {}) {
+  if (!chatsById.size) loadStore();
+  const request = validateVoiceRetryRequest(input);
+  const recoveryKey = `${request.jid}:${request.messageId}`;
+  if (voiceRecoveryRequests.has(recoveryKey)) return voiceRecoveryRequests.get(recoveryKey);
+
+  const recovery = (async () => {
+    const stored = (messagesById.get(request.jid) || []).find((message) => (
+      message.key === request.messageId && message.kind === 'voice'
+    ));
+    if (!stored) throw new Error('This voice note is not in the synced conversation.');
+    if (stored.transcriptionStatus === 'complete') {
+      return { ok: true, status: 'complete' };
+    }
+
+    await ensureWhatsAppStarted();
+    const activeSocket = await waitForOpenSocket();
+    const messageKey = {
+      remoteJid: request.jid,
+      fromMe: Boolean(stored.isSender),
+      id: request.messageId,
+      ...(stored.participant ? { participant: stored.participant } : {}),
+    };
+    stored.transcriptionStatus = 'recovering';
+    stored.transcriptionError = null;
+    stored.text = '[voice note, recovering audio]';
+    scheduleSave();
+
+    await activeSocket.requestPlaceholderResend(messageKey, {
+      key: messageKey,
+      messageTimestamp: Math.floor(new Date(stored.timestamp || Date.now()).getTime() / 1000),
+      pushName: stored.senderName || undefined,
+    });
+
+    const deadline = Date.now() + 90_000;
+    while (Date.now() < deadline) {
+      if (stored.transcriptionStatus === 'complete' || stored.transcriptionStatus === 'empty') {
+        return { ok: true, status: stored.transcriptionStatus };
+      }
+      if (stored.transcriptionStatus === 'failed') {
+        throw new Error(stored.transcriptionError || 'Voice-note transcription failed.');
+      }
+      await wait(500);
+    }
+
+    stored.transcriptionStatus = 'failed';
+    stored.transcriptionError = 'The linked phone did not return this voice note in time.';
+    stored.text = '[voice note, transcript unavailable]';
+    scheduleSave();
+    throw new Error(stored.transcriptionError);
+  })();
+
+  voiceRecoveryRequests.set(recoveryKey, recovery);
+  try {
+    return await recovery;
+  } finally {
+    voiceRecoveryRequests.delete(recoveryKey);
+  }
 }
 
 function ingestProtoMessages(msgs) {
@@ -630,6 +715,7 @@ function ingestProtoMessages(msgs) {
     const stored = appendMessage(jid, {
       key: m.key?.id,
       isSender: !!m.key?.fromMe,
+      participant: m.key?.participant || null,
       senderName: m.pushName || jid.split('@')[0],
       text,
       timestamp: ts,

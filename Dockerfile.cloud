@@ -15,6 +15,11 @@ RUN cd web && npm ci --omit=dev
 RUN python3 -m venv /opt/cleared-voice \
   && /opt/cleared-voice/bin/pip install --no-cache-dir faster-whisper
 
+ENV HF_HOME=/opt/cleared-whisper \
+  WHISPER_MODEL=tiny
+
+RUN /opt/cleared-voice/bin/python -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', compute_type='int8')"
+
 COPY web ./web
 COPY cloud ./cloud
 COPY icon.svg ./icon.svg
@@ -22,10 +27,8 @@ COPY favicon.ico ./favicon.ico
 
 ENV NODE_ENV=production \
   CLOUD_DATA_DIR=/data \
-  HF_HOME=/data/huggingface \
   MAX_ACCOUNTS=3 \
   VOICE_TRANSCRIPTION=1 \
-  WHISPER_MODEL=tiny \
   PATH="/opt/cleared-voice/bin:${PATH}"
 
 EXPOSE 8080

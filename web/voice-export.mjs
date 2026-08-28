@@ -23,7 +23,9 @@ export function voiceNoteStats(messages = []) {
   const notes = messages.filter((message) => message?.kind === 'voice');
   const received = notes.filter((message) => !message.isSender);
   const complete = received.filter((message) => message.transcriptionStatus === 'complete' && cleanTranscript(message));
-  const pending = received.filter((message) => ['pending', 'transcribing'].includes(message.transcriptionStatus));
+  const pending = received.filter((message) => (
+    ['pending', 'recovering', 'transcribing'].includes(message.transcriptionStatus)
+  ));
   const failed = received.filter((message) => ['failed', 'empty'].includes(message.transcriptionStatus));
   return {
     total: notes.length,
@@ -68,7 +70,7 @@ export function buildVoiceNotesMarkdown({ who = 'Contact', messages = [], export
       `- Duration: ${durationLabel(message.seconds)}`,
       `- Status: ${status}`,
       '',
-      transcript || (status === 'transcribing' || status === 'pending'
+      transcript || (['pending', 'recovering', 'transcribing'].includes(status)
         ? '_Transcription is still in progress._'
         : '_Transcript unavailable._'),
       '',
