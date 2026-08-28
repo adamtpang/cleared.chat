@@ -759,6 +759,9 @@ async function runUnreadResync() {
     const previousUnread = new Map(
       [...chatsById].map(([id, chat]) => [id, Math.max(0, Number(chat.unreadCount) || 0)]),
     );
+    const previousActiveUnreadCount = [...chatsById.values()]
+      .filter((chat) => chat.lastActivity && !chat.isArchived && Number(chat.unreadCount) > 0)
+      .length;
 
     for (const chat of chatsById.values()) {
       if (chat.lastActivity && !chat.isArchived) chat.unreadCount = 0;
@@ -768,10 +771,20 @@ async function runUnreadResync() {
       await keys.set({
         'app-state-sync-version': Object.fromEntries(names.map((name) => [name, null])),
       });
-      await activeSocket.resyncAppState(names, true);
+      // This is deliberately not Baileys' initial-sync mode. Initial mode
+      // holds chat mutations until matching history rows exist in its
+      // temporary event buffer. On demand we already have history in our own
+      // store, so the unconditional 0/-1 read-state updates are authoritative.
+      await activeSocket.resyncAppState(names, false);
       // Baileys flushes the consolidated chat updates just after the resync
       // promise resolves.
       await wait(350);
+      const rebuiltActiveUnreadCount = [...chatsById.values()]
+        .filter((chat) => chat.lastActivity && !chat.isArchived && Number(chat.unreadCount) > 0)
+        .length;
+      if (previousActiveUnreadCount > 0 && rebuiltActiveUnreadCount === 0) {
+        throw new Error('WhatsApp returned an empty unread snapshot. The previous unread state was preserved.');
+      }
     } catch (error) {
       await keys.set({
         'app-state-sync-version': Object.fromEntries(
