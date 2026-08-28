@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `0229909`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `b7ae133`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -94,6 +94,14 @@ jobs. Expired WhatsApp media gets an explicit reupload retry. A failed voice
 note exposes `Retry transcript`, which requests that exact message from the
 linked phone and transcribes the recovered audio locally. Never inspect or log
 private audio or transcript text while testing this path.
+
+Voice-note recovery returns immediately and continues in the background. The
+retry control polls a metadata-only status endpoint and shows the current stage,
+elapsed time, an initial duration-based estimate, transcription percentage, and
+live remaining-time estimate. For a 13:46 note, the initial visible estimate is
+2 to 5 minutes. Recovery can wait up to 10 minutes for WhatsApp to return expired
+media before it reports a specific failure. The status endpoint never returns
+audio or transcript text.
 
 Baileys history snapshots use absolute unread counts, while live
 `chats.update` events use `-1` for mark unread, `0` for read, and positive
