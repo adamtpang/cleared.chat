@@ -23,7 +23,7 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `c9efafa`.
+The hosted app at `https://app.cleared.chat` is deployed from commit `e378fdb`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -59,6 +59,12 @@ by the same versioned private state. It removes the current conversation version
 from Unread and Priorities, decrements the visible queue, and advances to the
 next unread chat. The conversation remains under All and returns to the work
 queues after a newer message. It never changes WhatsApp read state.
+
+Reply drafts use one editable review modal. Confirming the modal copies the
+exact text and opens the matching WhatsApp composer when the chat has a direct
+phone-number identity. Group chats open WhatsApp with the reply still copied.
+The app never presses Send and has no message-send endpoint; Adam performs that
+final action in WhatsApp.
 
 WhatsApp protocol, key-distribution, history-sync, and app-state events are
 control traffic. `web/whatsapp.mjs` drops them at ingestion and removes old
@@ -99,8 +105,8 @@ action manually.
 3. Every open loop is scored by importance x urgency and classified as reply,
    task-first, later, or no reply owed.
 4. Unclear intent or facts produce one clarifying question before any draft.
-5. Drafts are editable, contain no em dashes or emojis, and are copied only
-   after explicit UI confirmation.
+5. Drafts are editable, contain no em dashes or emojis, and enter WhatsApp only
+   through the one-confirmation copy-and-open handoff.
 
 ## Private state
 
