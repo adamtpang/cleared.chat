@@ -552,7 +552,7 @@
       <a class="act" id="accountbtn" href="/account" title="Account" hidden>Account</a>
       <button class="act" onclick="openSettings()" title="Settings">Settings</button>
       <button class="act" id="loadall" onclick="loadEverything()" hidden>Reload everything</button>
-      <button class="btn" id="run" onclick="runTriage()" title="Rank unread WhatsApp chats by importance and urgency">Triage inbox</button>
+      <button class="btn" id="run" onclick="runTriage()" title="Rank open WhatsApp loops by importance and urgency">Triage inbox</button>
     </div>
   </header>
 
@@ -599,6 +599,7 @@
       </div>
       <div class="spacer"></div>
       <div class="chat-actions">
+        <button class="act name-contact-action" onclick="nameOpenContact()" style="display:none">Name contact</button>
         <button class="act" onclick="exportChat()" title="Save the whole conversation as markdown">Export .md</button>
         <button class="act" onclick="askThisThread()">Ask about this thread</button>
         <button class="act primary" onclick="draftForOpen()">Draft a reply</button>
@@ -606,6 +607,7 @@
       <details class="mobile-chat-actions">
         <summary title="Conversation actions" aria-label="Conversation actions">&#8943;</summary>
         <div class="menu">
+          <button class="name-contact-action" onclick="nameOpenContact();this.closest('details').removeAttribute('open')" style="display:none">Name contact</button>
           <button onclick="exportChat();this.closest('details').removeAttribute('open')">Export .md</button>
           <button onclick="askThisThread();this.closest('details').removeAttribute('open')">Ask about this thread</button>
           <button onclick="draftForOpen();this.closest('details').removeAttribute('open')">Draft a reply</button>
@@ -680,6 +682,12 @@
           <button class="aibtn" onclick="bumpZoom(0.05)">A+</button>
         </div>
       </div>
+      <details class="pairfallback">
+        <summary>How triage works</summary>
+        <div class="hint2" style="margin-top:var(--space-2x)">
+          Importance is 1 to 5 based on the relationship and what is at stake. Urgency is 1 to 5 based on deadlines, waiting, and whether someone is blocked. Priority is importance multiplied by urgency, plus one point for each full week waiting, capped at eight. Direct questions, money, and promises rise. Your last message means waiting. Acknowledgments and unaddressed group chatter are let go.
+        </div>
+      </details>
       <div style="padding-top:var(--space-4x)">
         <div class="lbl2" style="margin-bottom:var(--space-2x)">Connected sources</div>
         <div id="srcstatus"><div class="hint2">Load once to see source status.</div></div>
@@ -1497,7 +1505,7 @@
         '<span><b>'+(c.total||0)+'</b> total</span>'
       + '<span><b>'+(c.messages||0)+'</b> chats</span>'
       + (emailEnabled ? '<span><b>'+(c.emails||0)+'</b> email</span>' : '')
-      + '<span><b>'+(c.unread||0)+'</b> unread</span>'
+      + '<span title="WhatsApp companion sync can undercount this. Triage checks every active chat."><b>'+(c.unread||0)+'</b> WA unread flags</span>'
       + (g && g.gmail && g.gmail.authMode === 'token' ? '<span title="sprite.email refreshes these">tokens ~1h</span>' : '')
       + (g && g.whatsappDirect ? '<span>wa: '+esc(g.whatsappDirect.status||'?')+'</span>' : '');
   }
@@ -1607,6 +1615,9 @@
     setAvatar($('#chatavatar'), it);
     $('#chatwho').textContent = it.who || '(no title)';
     $('#chatnet').textContent = it.network + (it.isArchived ? ' · archived' : '');
+    document.querySelectorAll('.name-contact-action').forEach((button) => {
+      button.style.display = isUnnamedWhatsAppContact(it) ? '' : 'none';
+    });
     $('#chatbody').innerHTML = '<div class="chatempty">Loading conversation…</div>';
     // Point the draft assistant at whoever is open, so "draft a reply" means this one.
     setCtx({ id: it.id, who: it.who, network: it.network });
@@ -1633,6 +1644,37 @@
     document.body.classList.remove('conversation-open');
     const selected = document.querySelector('.allrow.on, .indexrow.on');
     if(selected) selected.focus({preventScroll:true});
+  }
+
+  function isUnnamedWhatsAppContact(it){
+    return Boolean(it && /whatsapp/i.test(String(it.network || '')) && it.type !== 'group'
+      && !/\p{L}/u.test(String(it.who || '')));
+  }
+
+  async function nameOpenContact(){
+    if(!openId) return;
+    const it = ALL.find(x => x.id === openId);
+    if(!it) return;
+    const name = window.prompt('Name this contact privately in cleared.chat', '');
+    if(name === null || !name.trim()) return;
+    try{
+      const response = await fetch('/api/wa/contact-name', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({id:it.id,name:name.trim()})
+      });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Could not save contact name');
+      it.who = data.title;
+      $('#chatwho').textContent = data.title;
+      document.querySelectorAll('.name-contact-action').forEach((button) => { button.style.display = 'none'; });
+      const triaged = LATEST_TRIAGE_ITEMS.find(x => x.chatId === it.id);
+      if(triaged) triaged.who = data.title;
+      setCtx({ id: it.id, who: it.who, network: it.network });
+      filterRolodex($('#rolodex').value);
+    }catch(error){
+      $('#err').innerHTML = '<div class="err">'+esc(String(error.message||error))+'</div>';
+    }
   }
 
   // Export the open conversation as markdown. Downloads via the server so
@@ -1840,13 +1882,14 @@
   async function runTriage(){
     const b = $('#run'); b.disabled = true; b.textContent = 'Triaging…';
     $('#err').innerHTML = '';
-    $('#list').innerHTML = '<div class="state">Reading inbox, then ranking with the model. This can take 2 to 5 minutes.</div>';
+    $('#list').innerHTML = '<div class="state">Checking every active WhatsApp conversation, then ranking the open loops.</div>';
     startProg();
     try{
-      // Long timeout: the model ranks the exact unread WhatsApp queue.
+      // Unread flags from companion sync are incomplete, so triage every
+      // active WhatsApp conversation that looks like it is in Adam's court.
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 10 * 60 * 1000);
-      const data = await (await fetch('/api/inbox?scope=whatsapp-unread', { signal: ctrl.signal })).json();
+      const data = await (await fetch('/api/inbox?scope=whatsapp-open', { signal: ctrl.signal })).json();
       clearTimeout(to);
       if(data.error) throw new Error(data.error);
       const llm = data.llm || (data.demo ? 'demo' : '');

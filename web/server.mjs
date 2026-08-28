@@ -30,6 +30,7 @@ import {
   pairWithQr,
   isWhatsAppChatId,
   applyUnreadReference as applyWhatsAppUnreadReference,
+  setContactAlias as setWhatsAppContactAlias,
 } from './whatsapp.mjs';
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
 
@@ -505,14 +506,13 @@ function localHeuristicRank(chats, now = new Date()) {
       nextStep = 'Answer the question.';
       draft = ''; // no voice model available offline
     } else {
-      // They spoke last, not ack-only
+      // They spoke last, but a local rules engine cannot infer intent safely.
+      // Keep it available for review without inflating the reply-owed queue.
       importance = clamp(Math.round(1 + weight * 4), 1, 5);
       urgency = clamp(2 + Math.min(3, Math.floor((state.daysSinceLast || 0) / 7)), 2, 5);
-      proposed = weight >= 0.45 || (state.daysSinceLast || 0) >= 3 ? FATE.QUICK : FATE.UNCLEAR;
-      reason = weight >= 0.45
-        ? 'They spoke last; relationship weight says this matters.'
-        : 'They spoke last; intent unclear without a model.';
-      nextStep = proposed === FATE.QUICK ? 'Quick reply or decide to let go.' : 'Skim and decide.';
+      proposed = FATE.UNCLEAR;
+      reason = 'They spoke last, but no clear ask was detected without a model.';
+      nextStep = 'Skim once and decide whether to reply or let go.';
     }
 
     const base = importance * urgency;
@@ -817,7 +817,14 @@ async function getRankedInbox({ scope = 'all' } = {}) {
       discordError = d.error;
     }
     let chats = [...beeperChats, ...gmail.items, ...waChats, ...discordChats];
-    if (scope === 'whatsapp-unread') {
+    if (scope === 'whatsapp-open') {
+      const now = new Date();
+      chats = chats.filter((chat) => {
+        if (chat.source !== 'whatsapp-direct' || chat.isArchived) return false;
+        const state = deriveState(chat, now);
+        return !state.empty && (state.ballInMyCourt || state.myOpenPromise);
+      });
+    } else if (scope === 'whatsapp-unread') {
       chats = chats.filter((chat) => (
         chat.source === 'whatsapp-direct'
         && Number(chat.unreadCount ?? chat.unread) > 0
@@ -828,7 +835,9 @@ async function getRankedInbox({ scope = 'all' } = {}) {
     }
     if (!chats.length) {
       if (scope !== 'all') {
-        throw new Error('No unread chats were found in the current local snapshot.');
+        throw new Error(scope === 'whatsapp-open'
+          ? 'No active WhatsApp conversations currently look like your turn.'
+          : 'No unread chats were found in the current local snapshot.');
       }
       const wa = whatsAppStatus().status;
       throw new Error(WHATSAPP_DIRECT && wa !== 'open'
@@ -1543,7 +1552,7 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/inbox') {
       const requestedScope = url.searchParams.get('scope') || 'all';
-      const scope = ['all', 'unread', 'whatsapp-unread'].includes(requestedScope) ? requestedScope : 'all';
+      const scope = ['all', 'unread', 'whatsapp-unread', 'whatsapp-open'].includes(requestedScope) ? requestedScope : 'all';
       return send(res, 200, await getRankedInbox({ scope }));
     }
     if (req.method === 'GET' && url.pathname === '/api/all') return send(res, 200, await getEverything());
@@ -1551,6 +1560,11 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const items = Array.isArray(body.items) ? body.items : [];
       return send(res, 200, applyWhatsAppUnreadReference(items));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/wa/contact-name') {
+      const body = await readBody(req);
+      if (!body.id) return send(res, 400, { error: 'missing id' });
+      return send(res, 200, setWhatsAppContactAlias(body.id, body.name));
     }
     if (req.method === 'GET' && url.pathname === '/api/inbox/latest') {
       const f = INBOX_CACHE_FILE();

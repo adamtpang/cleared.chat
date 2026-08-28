@@ -48,6 +48,7 @@ web/wa-auth/
 web/wa-auth-2/
 web/wa-auth-3/
 web/wa-store.json
+web/contact-aliases.json
 
 # activated license state — local to this machine, never commit
 web/.license.json

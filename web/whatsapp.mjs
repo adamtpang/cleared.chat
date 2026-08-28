@@ -78,6 +78,7 @@ const AUTH_DIR = () => {
   return join(DATA_DIR(), 'wa-auth');
 };
 const STORE_FILE = () => join(DATA_DIR(), 'wa-store.json');
+const CONTACT_ALIASES_FILE = () => join(DATA_DIR(), 'contact-aliases.json');
 const SOURCE_PREFIX = 'wa:';
 
 function selectFreshAuthDir() {
@@ -263,6 +264,8 @@ export async function pairWithQr() {
 const chatsById = new Map();   // id -> { id, title, imgUrl, network:'WhatsApp', type, isMuted, unreadCount, lastActivity }
 const messagesById = new Map(); // id -> [{ isSender, senderName, text, timestamp }] oldest -> newest
 const lidToPhone = new Map();
+const contactAliases = new Map();
+let contactAliasesLoaded = false;
 
 export function canonicalWhatsAppJid(raw) {
   const jid = jidNormalizedUser(raw || '');
@@ -347,31 +350,77 @@ function scheduleSave() {
 }
 
 function loadStore() {
+  loadContactAliases();
   if (!existsSync(STORE_FILE())) return;
   try {
     const j = JSON.parse(readFileSync(STORE_FILE(), 'utf8'));
     for (const c of j.chats || []) chatsById.set(c.id, c);
-    for (const [id, msgs] of Object.entries(j.messages || {})) messagesById.set(id, msgs);
+    let removedControlMessages = false;
+    for (const [id, msgs] of Object.entries(j.messages || {})) {
+      const visible = (msgs || []).filter(isVisibleStoredMessage);
+      if (visible.length !== (msgs || []).length) removedControlMessages = true;
+      messagesById.set(id, visible);
+    }
     historyStatus = j.meta?.historyStatus || historyStatus;
     historyProgress = j.meta?.historyProgress ?? historyProgress;
     lastHistorySyncAt = j.meta?.lastHistorySyncAt || lastHistorySyncAt;
     registerLidMappings((j.meta?.lidMappings || []).map(([lid, pn]) => ({ lid, pn })));
+    if (removedControlMessages) scheduleSave();
   } catch { /* non-fatal */ }
+}
+
+function loadContactAliases() {
+  if (contactAliasesLoaded) return;
+  contactAliasesLoaded = true;
+  try {
+    const aliases = JSON.parse(readFileSync(CONTACT_ALIASES_FILE(), 'utf8'));
+    for (const [id, name] of Object.entries(aliases || {})) {
+      const jid = canonicalWhatsAppJid(id);
+      const clean = String(name || '').trim();
+      if (jid && clean) contactAliases.set(jid, clean);
+    }
+  } catch { /* an empty alias store is expected */ }
+}
+
+function saveContactAliases() {
+  mkdirSync(DATA_DIR(), { recursive: true });
+  writeFileSync(CONTACT_ALIASES_FILE(), JSON.stringify(Object.fromEntries(contactAliases), null, 2));
 }
 
 function contentOf(m) {
   return normalizeMessageContent(m?.message) || m?.message || {};
 }
 
-function textOf(m) {
+export function messageTextForDisplay(m) {
   const c = contentOf(m);
-  return c.conversation
-    || c.extendedTextMessage?.text
-    || c.imageMessage?.caption
-    || c.videoMessage?.caption
-    || (c.audioMessage ? '[voice note, waiting for transcript]' : '')
-    || (c.reactionMessage ? '' : '')
-    || (Object.keys(c).length ? `[${Object.keys(c)[0]}]` : '');
+  if (c.conversation) return c.conversation;
+  if (c.extendedTextMessage?.text) return c.extendedTextMessage.text;
+  if (c.imageMessage) return c.imageMessage.caption || '[image]';
+  if (c.videoMessage) return c.videoMessage.caption || '[video]';
+  if (c.audioMessage) return '[voice note, waiting for transcript]';
+  if (c.documentMessage) return c.documentMessage.fileName || '[document]';
+  if (c.stickerMessage) return '[sticker]';
+  if (c.contactMessage) return c.contactMessage.displayName
+    ? `[contact: ${c.contactMessage.displayName}]`
+    : '[contact]';
+  if (c.contactsArrayMessage) return '[contacts]';
+  if (c.locationMessage) return '[location]';
+  if (c.liveLocationMessage) return '[live location]';
+  if (c.pollCreationMessage?.name) return `[poll: ${c.pollCreationMessage.name}]`;
+  if (c.pollCreationMessageV3?.name) return `[poll: ${c.pollCreationMessageV3.name}]`;
+  if (c.eventMessage?.name) return `[event: ${c.eventMessage.name}]`;
+  if (c.buttonsMessage?.contentText) return c.buttonsMessage.contentText;
+  if (c.listMessage?.description) return c.listMessage.description;
+  // Reactions, protocol events, key distribution, history sync, revokes, and
+  // app-state updates are WhatsApp control traffic. They are not chat rows.
+  return '';
+}
+
+const CONTROL_PLACEHOLDER = /^\[(?:protocolMessage|senderKeyDistributionMessage|messageContextInfo|deviceSentMessage|historySyncNotification|appStateSyncKey(?:Share|Request|Fingerprint)|syncAction|reactionMessage|pollUpdateMessage|keepInChatMessage|pinInChatMessage|requestPhoneNumberMessage)\]$/i;
+
+export function isVisibleStoredMessage(message = {}) {
+  const text = String(message.text || '').trim();
+  return Boolean(text) && !CONTROL_PLACEHOLDER.test(text);
 }
 
 function voiceInfo(m) {
@@ -521,9 +570,10 @@ function ingestProtoMessages(msgs) {
   for (const m of msgs || []) {
     const jid = canonicalWhatsAppJid(m.key?.remoteJid || m.key?.remoteJidAlt || '');
     if (!jid || jid === 'status@broadcast') continue;
-    const text = textOf(m);
-    const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp) * 1000).toISOString() : new Date().toISOString();
+    const text = messageTextForDisplay(m);
     const voice = voiceInfo(m);
+    if (!text && !voice) continue;
+    const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp) * 1000).toISOString() : new Date().toISOString();
     const stored = appendMessage(jid, {
       key: m.key?.id,
       isSender: !!m.key?.fromMe,
@@ -559,8 +609,29 @@ export function listChats(options = {}) {
   const rows = [...chatsById.values()]
     .filter((c) => c.lastActivity && (includeArchived || !c.isArchived))
     .sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))
-    .map((c) => ({ ...c, id: toWhatsAppSourceId(c.id), source: 'whatsapp-direct', messages: messagesById.get(c.id) || [] }));
+    .map((c) => ({
+      ...c,
+      title: contactAliases.get(c.id) || c.title,
+      id: toWhatsAppSourceId(c.id),
+      source: 'whatsapp-direct',
+      messages: (messagesById.get(c.id) || []).filter(isVisibleStoredMessage),
+    }));
   return Number.isFinite(limit) ? rows.slice(0, Math.max(0, limit)) : rows;
+}
+
+export function setContactAlias(chatId, name) {
+  if (!chatsById.size) loadStore();
+  loadContactAliases();
+  const jid = canonicalWhatsAppJid(whatsappJid(chatId));
+  if (!jid || !chatsById.has(jid)) throw new Error('WhatsApp chat not found');
+  const clean = String(name || '').trim().slice(0, 80);
+  if (clean) contactAliases.set(jid, clean);
+  else contactAliases.delete(jid);
+  saveContactAliases();
+  return {
+    id: toWhatsAppSourceId(jid),
+    title: clean || chatsById.get(jid)?.title || jid.split('@')[0],
+  };
 }
 
 // Import a read-only unread snapshot from another local WhatsApp client.
@@ -598,7 +669,7 @@ export function applyUnreadReference(rows = []) {
 export function getMessages(chatId, limit = 20) {
   if (!chatsById.size) loadStore();
   const list = messagesById.get(canonicalWhatsAppJid(whatsappJid(chatId))) || [];
-  return list.slice(-limit);
+  return list.filter(isVisibleStoredMessage).slice(-limit);
 }
 
 const profilePhotoRequests = new Map();

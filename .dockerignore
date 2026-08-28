@@ -17,6 +17,7 @@ tasks.md
 *_CONTINUE_FROM_*.md
 web/wa-auth*
 web/wa-store.json
+web/contact-aliases.json
 web/snapshots
 web/inbox-triage-result.json
 web/.license.json

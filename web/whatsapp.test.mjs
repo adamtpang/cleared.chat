@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   canonicalWhatsAppJid,
   isWhatsAppChatId,
+  isVisibleStoredMessage,
+  messageTextForDisplay,
   normalizeChatPatch,
   normalizeContactPatch,
   registerLidMappings,
@@ -63,4 +65,17 @@ test('WhatsApp contact photo changes invalidate the cached image', () => {
 test('WhatsApp LID identities resolve to the phone-number thread', () => {
   registerLidMappings([{ lid: '123456789@lid', pn: '60123456789@s.whatsapp.net' }]);
   assert.equal(canonicalWhatsAppJid('123456789@lid'), '60123456789@s.whatsapp.net');
+});
+
+test('WhatsApp protocol traffic is never rendered as a chat message', () => {
+  assert.equal(messageTextForDisplay({ message: { protocolMessage: { type: 0 } } }), '');
+  assert.equal(messageTextForDisplay({ message: { senderKeyDistributionMessage: {} } }), '');
+  assert.equal(isVisibleStoredMessage({ text: '[protocolMessage]' }), false);
+  assert.equal(isVisibleStoredMessage({ text: '[senderKeyDistributionMessage]' }), false);
+});
+
+test('visible WhatsApp attachments keep useful placeholders', () => {
+  assert.equal(messageTextForDisplay({ message: { imageMessage: {} } }), '[image]');
+  assert.equal(messageTextForDisplay({ message: { documentMessage: { fileName: 'brief.pdf' } } }), 'brief.pdf');
+  assert.equal(isVisibleStoredMessage({ text: '[voice note, transcribing locally]' }), true);
 });
