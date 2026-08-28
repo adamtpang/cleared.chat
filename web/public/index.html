@@ -182,6 +182,9 @@
   .allrow .side{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:5px;flex:none;min-width:38px}
   .allrow .is{display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:10.5px;line-height:1;color:var(--primary-foreground);background:var(--primary);border-radius:var(--r-full);height:20px;min-width:20px;padding:0 6px;font-variant-numeric:tabular-nums}
   .allrow .ago{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums;min-width:32px;text-align:right}
+  .clear-chat-btn{border:1px solid var(--line-2);background:var(--surface);color:var(--muted-foreground);font:700 10.5px/1 var(--font);padding:6px 8px;border-radius:var(--r-sm);cursor:pointer}
+  .clear-chat-btn:hover{border-color:var(--primary);color:var(--primary)}
+  .clear-chat-btn:focus-visible{outline:2px solid var(--brand-light);outline-offset:1px}
   .bubble.voice-note{border-left:3px solid var(--primary)}
   .voice-note-label{display:flex;align-items:center;gap:7px;margin-bottom:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)}
   .voice-note-label::before{content:"";width:8px;height:8px;border:2px solid currentColor;border-radius:var(--r-full);box-shadow:3px 0 0 -1px currentColor}
@@ -615,6 +618,7 @@
         <button class="act voice-export-action" onclick="exportVoiceNotes()" style="display:none">Voice transcripts .md</button>
         <button class="act" onclick="exportChat()" title="Save the whole conversation as markdown">Export .md</button>
         <button class="act" onclick="askThisThread()">Ask about this thread</button>
+        <button class="act clear-open-action" onclick="clearOpenChat(this)" title="Remove this version from your open loops">Cleared</button>
         <button class="act primary" onclick="draftForOpen()">Draft a reply</button>
       </div>
       <details class="mobile-chat-actions">
@@ -624,6 +628,7 @@
           <button class="voice-export-action" onclick="exportVoiceNotes();this.closest('details').removeAttribute('open')" style="display:none">Voice transcripts .md</button>
           <button onclick="exportChat();this.closest('details').removeAttribute('open')">Export .md</button>
           <button onclick="askThisThread();this.closest('details').removeAttribute('open')">Ask about this thread</button>
+          <button class="clear-open-action" onclick="clearOpenChat(this)">Cleared</button>
           <button onclick="draftForOpen();this.closest('details').removeAttribute('open')">Draft a reply</button>
         </div>
       </details>
@@ -955,6 +960,64 @@
       if(btn){ btn.disabled = false; btn.textContent = old; }
       $('#err').innerHTML = '<div class="err">'+esc(String(error.message||error))+'</div>';
     }
+  }
+
+  async function clearUnreadChat(chatId, btn){
+    const item = ALL.find((entry) => entry.id === chatId);
+    if(!item || item.cleared) return;
+    const conversationVersion = item.lastAt || '';
+    if(!conversationVersion){
+      $('#err').innerHTML = '<div class="err">Reload the inbox once, then clear this chat.</div>';
+      return;
+    }
+    const old = btn ? btn.textContent : 'Cleared';
+    if(btn){ btn.disabled = true; btn.textContent = 'Saving'; }
+    try{
+      const response = await fetch('/api/solved', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({chatId, conversationVersion})
+      });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Could not clear this chat');
+
+      item.cleared = true;
+      delete window.__items[chatId];
+      LATEST_TRIAGE_ITEMS = LATEST_TRIAGE_ITEMS.filter((entry) => entry.chatId !== chatId);
+      VOICE_QUEUE = VOICE_QUEUE.filter((entry) => entry.chatId !== chatId);
+      const priorityMeta = currentTriageMeta(LATEST_TRIAGE_ITEMS);
+      LATEST_TRIAGE_META = priorityMeta;
+      window.__eightyTwenty = priorityMeta;
+      $('#cntPriority').textContent = priorityMeta.actionCount;
+
+      const unread = ALL.filter((entry) => entry.kind === 'message'
+        && entry.unread > 0 && !entry.isArchived && !entry.cleared);
+      $('#cntUnread').textContent = unread.length;
+      if(LAST_COUNTS){
+        LAST_COUNTS.unread = unread.length;
+        renderSideStats(LAST_COUNTS, LAST_SOURCES);
+      }
+      filterRolodex($('#rolodex').value);
+
+      if(openId === chatId){
+        if(TAB === 'unread' && unread.length){
+          await openChat(unread[0].id);
+        }else if(TAB === 'unread'){
+          openId = null;
+          $('#chathead').style.display = 'none';
+          $('#chatbody').innerHTML = '<div class="chatempty">No unread WhatsApp chats. You are caught up.</div>';
+        }else{
+          document.querySelectorAll('.clear-open-action').forEach((button) => { button.disabled = true; });
+        }
+      }
+    }catch(error){
+      if(btn){ btn.disabled = false; btn.textContent = old; }
+      $('#err').innerHTML = '<div class="err">'+esc(String(error.message||error))+'</div>';
+    }
+  }
+
+  function clearOpenChat(btn){
+    if(openId) clearUnreadChat(openId, btn);
   }
 
   async function blockTime(chatId, btn){
@@ -1599,6 +1662,7 @@
   let openId = null;
   let LATEST_TRIAGE_ITEMS = [];
   let LATEST_TRIAGE_META = null;
+  let LAST_COUNTS = null;
 
   function renderSideStats(c, g){
     const wa = g && g.whatsappDirect;
@@ -1658,7 +1722,7 @@
       return;
     }
     const msgs = items.filter(i => i.kind === 'message');
-    const unread = msgs.filter(i => i.unread > 0 && !i.isArchived);
+    const unread = msgs.filter(i => i.unread > 0 && !i.isArchived && !i.cleared);
     const mail = items.filter(i => i.kind === 'email');
     const inbox = mail.filter(i => !i.isArchived);
     const filed = mail.filter(i => i.isArchived);
@@ -1724,6 +1788,12 @@
     setAvatar($('#chatavatar'), it);
     $('#chatwho').textContent = it.who || '(no title)';
     $('#chatnet').textContent = it.network + (it.isArchived ? ' · archived' : '');
+    document.querySelectorAll('.clear-open-action').forEach((button) => {
+      button.disabled = Boolean(it.cleared);
+      button.title = it.cleared
+        ? 'This conversation version is already cleared'
+        : 'Remove this version from your open loops';
+    });
     document.querySelectorAll('.name-contact-action').forEach((button) => {
       button.style.display = isUnnamedWhatsAppContact(it) ? '' : 'none';
     });
@@ -1946,6 +2016,7 @@
     ALL = data.items || [];
     LAST_SOURCES = data.sources || null;
     const c = data.counts || {};
+    LAST_COUNTS = {...c};
     const g = data.sources || {};
     const directCount = Number(g.whatsappDirect?.counts?.active ?? g.whatsappDirect?.count ?? 0);
     if(directCount > 0) waLastLoadedCount = directCount;
@@ -1965,7 +2036,7 @@
     paintList(ALL);
     if(!openId && window.matchMedia('(min-width: 821px)').matches){
       const first = TAB === 'unread'
-        ? ALL.find((item) => item.kind === 'message' && item.unread > 0 && !item.isArchived)
+        ? ALL.find((item) => item.kind === 'message' && item.unread > 0 && !item.isArchived && !item.cleared)
         : ALL.find((item) => item.kind === 'message') || ALL[0];
       if(first) setTimeout(() => openChat(first.id), 0);
     }
@@ -1992,6 +2063,9 @@
       + '<div class="side">'
       +   '<span class="ago">'+esc(agoOf(it.lastAt))+'</span>'
       +   (it.unread>0?'<span class="is" aria-label="'+it.unread+' unread messages">'+it.unread+'</span>':'')
+      +   (TAB === 'unread' && it.unread > 0 && !it.cleared
+            ? '<button class="clear-chat-btn" aria-label="Mark '+esc(it.who||'chat')+' cleared" onclick="event.stopPropagation();clearUnreadChat('+jsq(it.id)+',this)">Cleared</button>'
+            : '')
       + '</div>'
       + '</div>').join('') + '</div>';
   }

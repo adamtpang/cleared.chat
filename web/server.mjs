@@ -982,8 +982,10 @@ function readSolvedChats() {
 }
 
 function solvedMatches(item, solved = readSolvedChats()) {
-  const record = solved?.[item?.chatId];
-  return Boolean(record && String(record.conversationVersion || '') === String(item?.conversationVersion || ''));
+  const chatId = item?.chatId || item?.id;
+  const conversationVersion = item?.conversationVersion || item?.lastAt;
+  const record = solved?.[chatId];
+  return Boolean(record && String(record.conversationVersion || '') === String(conversationVersion || ''));
 }
 
 function buildEightyTwenty(items) {
@@ -1133,6 +1135,7 @@ async function runEverything() {
       const m = (c.messages || [])[(c.messages || []).length - 1];
       return m?.timestamp ? new Date(m.timestamp).getTime() : 0;
     };
+    const solvedChats = readSolvedChats();
     const items = [...chats, ...emails, ...waChats, ...discordChats]
       .map((c) => {
         const msgs = c.messages || [];
@@ -1152,13 +1155,14 @@ async function runEverything() {
           avatarUrl: avatarUrlFor(c),
         };
       })
+      .map((item) => ({ ...item, cleared: solvedMatches(item, solvedChats) }))
       .sort((a, b) => new Date(b.lastAt || 0) - new Date(a.lastAt || 0));
 
     const counts = {
       total: items.length,
       messages: items.filter((i) => i.kind === 'message').length,
       emails: items.filter((i) => i.kind === 'email').length,
-      unread: items.filter((i) => i.unread > 0).length,
+      unread: items.filter((i) => i.unread > 0 && !i.cleared).length,
       archived: items.filter((i) => i.isArchived).length,
     };
     return { items, counts, sources, errors, at: new Date().toISOString() };
