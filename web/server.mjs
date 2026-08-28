@@ -33,6 +33,7 @@ import {
   setContactAlias as setWhatsAppContactAlias,
 } from './whatsapp.mjs';
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
+import { buildVoiceNotesMarkdown, voiceNoteStats } from './voice-export.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -963,6 +964,14 @@ async function exportChatMarkdown(chatId, who) {
   ].filter((x) => x !== '').join('\n');
 }
 
+function voiceNotesMarkdown(chatId, who) {
+  if (!isWhatsAppChatId(chatId)) throw new Error('Voice-note export is available for WhatsApp chats.');
+  return buildVoiceNotesMarkdown({
+    who,
+    messages: getWhatsAppMessages(chatId, 4000),
+  });
+}
+
 const INBOX_CACHE_FILE = () => join(SNAPSHOT_DIR, 'inbox-latest.json');
 const SOLVED_CHATS_FILE = () => join(SNAPSHOT_DIR, 'solved-chats.json');
 
@@ -1673,6 +1682,20 @@ const server = createServer(async (req, res) => {
       return res.end(md);
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/export/voice-notes') {
+      const id = url.searchParams.get('id');
+      if (!id) return send(res, 400, { error: 'missing id' });
+      const who = url.searchParams.get('who') || 'contact';
+      if (!isWhatsAppChatId(id)) return send(res, 400, { error: 'Voice-note export is available for WhatsApp chats.' });
+      const md = voiceNotesMarkdown(id, who);
+      const safe = String(who).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'contact';
+      res.writeHead(200, {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${safe}-voice-notes.md"`,
+      });
+      return res.end(md);
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/messages') {
       const id = url.searchParams.get('id');
       if (!id) return send(res, 400, { error: 'missing id' });
@@ -1691,7 +1714,14 @@ const server = createServer(async (req, res) => {
       }
       const limit = Math.min(200, Number(url.searchParams.get('limit') || 60));
       if (isWhatsAppChatId(id)) {
-        return send(res, 200, { messages: getWhatsAppMessages(id, limit), kind: 'chat', source: 'whatsapp-direct' });
+        const messages = getWhatsAppMessages(id, limit);
+        const allStoredMessages = limit >= 200 ? messages : getWhatsAppMessages(id, 4000);
+        return send(res, 200, {
+          messages,
+          voiceNotes: voiceNoteStats(allStoredMessages),
+          kind: 'chat',
+          source: 'whatsapp-direct',
+        });
       }
       if (!BEEPER_ENABLED) return send(res, 404, { error: 'This source is not connected.' });
       const m = await beeper(`/v1/chats/${encodeURIComponent(id)}/messages?limit=${limit}`);

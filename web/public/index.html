@@ -167,7 +167,9 @@
   .allrow{display:grid;grid-template-columns:38px 1fr auto;gap:var(--space-3x);align-items:center;padding:10px 11px;border:1px solid transparent;border-radius:var(--r-md);cursor:pointer;transition:background 100ms var(--ease-out)}
   .allrow:hover{background:var(--hover)}
   .allrow:focus-visible{outline:2px solid var(--brand-light);outline-offset:1px}
-  .allrow.unread{background:rgb(from var(--brand) r g b / 6%)}
+  .allrow.unread .iw{font-weight:800}
+  .allrow.unread .im{font-weight:650;color:var(--foreground)}
+  .allrow.unread .ago{font-weight:700;color:var(--primary)}
   .allrow .avatar{width:38px;height:38px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex:none;text-transform:uppercase}
   .avatar{position:relative;overflow:hidden;isolation:isolate}
   .avatar .avatar-fallback{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
@@ -177,9 +179,13 @@
   .allrow .iw{font-weight:600;font-size:15px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
   .allrow .im{font-size:12.5px;color:var(--muted-foreground);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .allrow .fromme{color:var(--faint)}
-  .allrow .side{display:flex;align-items:center;gap:var(--space-2x);flex:none}
-  .allrow .is{font-weight:800;font-size:11px;color:var(--primary-foreground);background:var(--primary);border-radius:var(--r-full);padding:2px 7px;font-variant-numeric:tabular-nums}
+  .allrow .side{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:5px;flex:none;min-width:38px}
+  .allrow .is{display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:10.5px;line-height:1;color:var(--primary-foreground);background:var(--primary);border-radius:var(--r-full);height:20px;min-width:20px;padding:0 6px;font-variant-numeric:tabular-nums}
   .allrow .ago{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums;min-width:32px;text-align:right}
+  .bubble.voice-note{border-left:3px solid var(--primary)}
+  .voice-note-label{display:flex;align-items:center;gap:7px;margin-bottom:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)}
+  .voice-note-label::before{content:"";width:8px;height:8px;border:2px solid currentColor;border-radius:var(--r-full);box-shadow:3px 0 0 -1px currentColor}
+  .voice-note-text{white-space:pre-wrap}
   /* shrink-to-ellipsis rather than flex:none - a Gmail label carries the
      account address, which is long enough to push the row off-screen */
   .kindtag{font-size:10px;font-weight:700;letter-spacing:.03em;padding:2px 6px;border-radius:var(--r-sm);flex:0 1 auto;min-width:0;max-width:40%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -604,6 +610,7 @@
       <div class="spacer"></div>
       <div class="chat-actions">
         <button class="act name-contact-action" onclick="nameOpenContact()" style="display:none">Name contact</button>
+        <button class="act voice-export-action" onclick="exportVoiceNotes()" style="display:none">Voice transcripts .md</button>
         <button class="act" onclick="exportChat()" title="Save the whole conversation as markdown">Export .md</button>
         <button class="act" onclick="askThisThread()">Ask about this thread</button>
         <button class="act primary" onclick="draftForOpen()">Draft a reply</button>
@@ -612,6 +619,7 @@
         <summary title="Conversation actions" aria-label="Conversation actions">&#8943;</summary>
         <div class="menu">
           <button class="name-contact-action" onclick="nameOpenContact();this.closest('details').removeAttribute('open')" style="display:none">Name contact</button>
+          <button class="voice-export-action" onclick="exportVoiceNotes();this.closest('details').removeAttribute('open')" style="display:none">Voice transcripts .md</button>
           <button onclick="exportChat();this.closest('details').removeAttribute('open')">Export .md</button>
           <button onclick="askThisThread();this.closest('details').removeAttribute('open')">Ask about this thread</button>
           <button onclick="draftForOpen();this.closest('details').removeAttribute('open')">Draft a reply</button>
@@ -1672,6 +1680,9 @@
     document.querySelectorAll('.name-contact-action').forEach((button) => {
       button.style.display = isUnnamedWhatsAppContact(it) ? '' : 'none';
     });
+    document.querySelectorAll('.voice-export-action').forEach((button) => {
+      button.style.display = 'none';
+    });
     $('#chatbody').innerHTML = '<div class="chatempty">Loading conversation…</div>';
     // Point the draft assistant at whoever is open, so "draft a reply" means this one.
     setCtx({ id: it.id, who: it.who, network: it.network });
@@ -1679,19 +1690,44 @@
       const d = await (await fetch('/api/messages?id='+encodeURIComponent(id)+'&limit=80')).json();
       if(d.error) throw new Error(d.error);
       const msgs = d.messages || [];
+      const voiceNotes = d.voiceNotes || {};
+      document.querySelectorAll('.voice-export-action').forEach((button) => {
+        button.style.display = Number(voiceNotes.received || 0) > 0 ? '' : 'none';
+        button.textContent = Number(voiceNotes.pending || 0) > 0
+          ? 'Transcribing ' + voiceNotes.complete + '/' + voiceNotes.received
+          : 'Voice transcripts .md (' + Number(voiceNotes.received || 0) + ')';
+        button.title = Number(voiceNotes.pending || 0) > 0
+          ? voiceNotes.pending + ' voice note transcription still in progress'
+          : 'Download received voice-note transcripts as Markdown';
+      });
       if(!msgs.length){
         $('#chatbody').innerHTML = '<div class="chatempty">'
           + esc(d.note || 'No messages loaded for this conversation.') + '</div>';
         return;
       }
-      $('#chatbody').innerHTML = msgs.map(m =>
-        '<div class="bubble '+(m.isSender?'me':'them')+'">'+esc(m.text)
-        + '<div class="bmeta">'+esc(m.isSender ? 'you' : (m.senderName||''))+' · '+esc(agoOf(m.timestamp))+'</div>'
-        + '</div>').join('');
+      $('#chatbody').innerHTML = msgs.map(messageBubble).join('');
       const body = $('#chatbody'); body.scrollTop = body.scrollHeight;
     }catch(e){
       $('#chatbody').innerHTML = '<div class="chatempty">Could not load: '+esc(String(e.message||e))+'</div>';
     }
+  }
+
+  function messageBubble(m){
+    const voice = m.kind === 'voice';
+    let text = String(m.transcript || m.text || '');
+    text = text.replace(/^\[Voice note transcript\]\s*/i, '');
+    if(voice && /^\[voice note,/i.test(text)){
+      text = ['pending','transcribing'].includes(m.transcriptionStatus)
+        ? 'Transcribing locally'
+        : 'Transcript unavailable';
+    }
+    const voiceLabel = voice
+      ? '<div class="voice-note-label">Voice note'+(m.seconds ? ' · '+Math.floor(m.seconds/60)+':'+String(Math.round(m.seconds%60)).padStart(2,'0') : '')+'</div>'
+      : '';
+    return '<div class="bubble '+(m.isSender?'me':'them')+(voice?' voice-note':'')+'">'
+      + voiceLabel + '<div class="'+(voice?'voice-note-text':'')+'">'+esc(text)+'</div>'
+      + '<div class="bmeta">'+esc(m.isSender ? 'you' : (m.senderName||''))+' · '+esc(agoOf(m.timestamp))+'</div>'
+      + '</div>';
   }
 
   function backToChats(){
@@ -1740,6 +1776,16 @@
     const u = "/api/export?id=" + encodeURIComponent(openId) + "&who=" + encodeURIComponent(who);
     const a = document.createElement("a");
     a.href = u; a.download = "";
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  function exportVoiceNotes(){
+    if(!openId) return;
+    const it = ALL.find(x => x.id === openId);
+    const who = it ? it.who : 'contact';
+    const u = '/api/export/voice-notes?id=' + encodeURIComponent(openId) + '&who=' + encodeURIComponent(who);
+    const a = document.createElement('a');
+    a.href = u; a.download = '';
     document.body.appendChild(a); a.click(); a.remove();
   }
 
@@ -1894,8 +1940,8 @@
       +   '<div class="im">'+(it.fromMe?'<span class="fromme">you: </span>':'')+esc(it.preview||'')+'</div>'
       + '</div>'
       + '<div class="side">'
-      +   (it.unread>0?'<span class="is">'+it.unread+'</span>':'')
       +   '<span class="ago">'+esc(agoOf(it.lastAt))+'</span>'
+      +   (it.unread>0?'<span class="is" aria-label="'+it.unread+' unread messages">'+it.unread+'</span>':'')
       + '</div>'
       + '</div>').join('') + '</div>';
   }
