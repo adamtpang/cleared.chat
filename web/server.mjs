@@ -34,6 +34,7 @@ import {
   setContactAlias as setWhatsAppContactAlias,
   sendWhatsAppText,
   retryVoiceTranscription as retryWhatsAppVoiceTranscription,
+  transcribeUploadedVoice as transcribeUploadedWhatsAppVoice,
   getVoiceTranscriptionStatus as getWhatsAppVoiceTranscriptionStatus,
 } from './whatsapp.mjs';
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
@@ -1512,7 +1513,20 @@ function send(res, code, body, type = 'application/json') {
   res.writeHead(code, { 'Content-Type': type });
   res.end(Buffer.isBuffer(body) || typeof body === 'string' ? body : JSON.stringify(body));
 }
-async function readBody(req) { let b = ''; for await (const c of req) b += c; return JSON.parse(b || '{}'); }
+async function readRawBody(req, maxBytes = 1024 * 1024) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) throw new Error('Request body is too large.');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function readBody(req) {
+  return JSON.parse((await readRawBody(req)).toString('utf8') || '{}');
+}
 
 async function whatsAppStatusForUi() {
   const { qr, ...status } = whatsAppStatus();
@@ -1758,6 +1772,15 @@ const server = createServer(async (req, res) => {
       return send(res, 200, await retryWhatsAppVoiceTranscription({
         chatId: body.chatId,
         messageId: body.messageId,
+      }));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/wa/voice/upload') {
+      const audio = await readRawBody(req, 16 * 1024 * 1024);
+      return send(res, 200, transcribeUploadedWhatsAppVoice({
+        chatId: req.headers['x-cleared-chat-id'],
+        messageId: req.headers['x-cleared-message-id'],
+        audio,
+        mimetype: req.headers['content-type'],
       }));
     }
     if (req.method === 'GET' && url.pathname === '/api/wa/voice/status') {

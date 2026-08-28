@@ -189,7 +189,9 @@
   .voice-note-label{display:flex;align-items:center;gap:7px;margin-bottom:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)}
   .voice-note-label::before{content:"";width:8px;height:8px;border:2px solid currentColor;border-radius:var(--r-full);box-shadow:3px 0 0 -1px currentColor}
   .voice-note-text{white-space:pre-wrap}
+  .voice-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
   .voice-retry{max-width:100%;margin-top:7px;border:1px solid currentColor;border-radius:var(--r-sm);background:transparent;color:inherit;font:600 11px/1.45 var(--font);padding:8px 10px;cursor:pointer;text-align:left;white-space:pre-line}
+  .voice-actions .voice-retry{margin-top:0}
   .voice-retry:disabled{opacity:.55;cursor:default}
   /* shrink-to-ellipsis rather than flex:none - a Gmail label carries the
      account address, which is long enough to push the row off-screen */
@@ -1957,7 +1959,11 @@
     const timestamp = messageTime(m.timestamp);
     const metadata = [m.isSender ? 'you' : (m.senderName || ''), timestamp].filter(Boolean).join(' · ');
     const retry = voice && voiceStatus === 'failed' && m.key
-      ? '<button class="voice-retry" onclick="retryVoiceTranscript(event,'+jsq(openId)+','+jsq(m.key)+',this)">Retry transcript</button>'
+      ? '<div class="voice-actions">'
+        +'<button class="voice-retry" onclick="retryVoiceTranscript(event,'+jsq(openId)+','+jsq(m.key)+',this)">Retry from WhatsApp</button>'
+        +'<button class="voice-retry" onclick="event.stopPropagation();this.nextElementSibling.click()">Upload audio file</button>'
+        +'<input hidden type="file" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav" onchange="uploadVoiceTranscript(event,'+jsq(openId)+','+jsq(m.key)+',this)">'
+        +'</div>'
       : '';
     return '<div class="bubble '+(m.isSender?'me':'them')+(voice?' voice-note':'')+'">'
       + voiceLabel + '<div class="'+(voice?'voice-note-text':'')+'">'+esc(text)+'</div>'
@@ -1985,6 +1991,40 @@
       button.textContent = 'Recovery stopped\n'+message+'\nClick to retry';
       button.title = message;
       $('#err').innerHTML = '<div class="err">'+esc(message)+'</div>';
+    }
+  }
+
+  async function uploadVoiceTranscript(event, chatId, messageId, input){
+    event.stopPropagation();
+    const file = input.files && input.files[0];
+    if(!file) return;
+    const actions = input.closest('.voice-actions');
+    const buttons = actions ? [...actions.querySelectorAll('button')] : [];
+    const button = input.previousElementSibling;
+    buttons.forEach(item => { item.disabled = true; });
+    button.textContent = 'Uploading '+file.name+'\n'+fileSizeLabel(file.size)+' · checking file';
+    try{
+      if(file.size > 16 * 1024 * 1024) throw new Error('Audio must be 16 MB or smaller.');
+      const response = await fetch('/api/wa/voice/upload', {
+        method:'POST',
+        headers:{
+          'content-type':file.type || 'application/octet-stream',
+          'x-cleared-chat-id':chatId,
+          'x-cleared-message-id':messageId
+        },
+        body:file
+      });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Could not upload this voice note.');
+      await watchVoiceTranscript(chatId, messageId, button, data);
+    }catch(error){
+      const message = String(error.message || error).slice(0, 220);
+      button.textContent = 'Upload stopped\n'+message+'\nChoose another audio file';
+      button.title = message;
+      buttons.forEach(item => { item.disabled = false; });
+      $('#err').innerHTML = '<div class="err">'+esc(message)+'</div>';
+    }finally{
+      input.value = '';
     }
   }
 

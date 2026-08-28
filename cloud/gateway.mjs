@@ -176,9 +176,14 @@ function hostedAppHtml(html, { publishableKey, frontendApi } = {}) {
 
 async function proxyToWorker(req, res, worker) {
   const method = req.method || 'GET';
-  const body = ['GET', 'HEAD'].includes(method) ? undefined : await readBody(req, 2 * 1024 * 1024);
+  const maxBodyBytes = String(req.url || '').startsWith('/api/wa/voice/upload')
+    ? 16 * 1024 * 1024
+    : 2 * 1024 * 1024;
+  const body = ['GET', 'HEAD'].includes(method) ? undefined : await readBody(req, maxBodyBytes);
   const headers = {};
   if (req.headers['content-type']) headers['content-type'] = req.headers['content-type'];
+  if (req.headers['x-cleared-chat-id']) headers['x-cleared-chat-id'] = req.headers['x-cleared-chat-id'];
+  if (req.headers['x-cleared-message-id']) headers['x-cleared-message-id'] = req.headers['x-cleared-message-id'];
   const upstream = await fetch(`http://127.0.0.1:${worker.port}${req.url}`, {
     method,
     headers,

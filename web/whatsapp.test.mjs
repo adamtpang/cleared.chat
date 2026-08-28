@@ -13,6 +13,7 @@ import {
   toWhatsAppSourceId,
   validateOutboundText,
   validateVoiceRetryRequest,
+  validateVoiceUpload,
   voiceProgressSnapshot,
   whatsappJid,
 } from './whatsapp.mjs';
@@ -90,6 +91,30 @@ test('voice recovery status exposes diagnostics without transcript content', () 
   assert.equal(status.secondsUntilFailure, 35);
   assert.equal(status.sourceConnected, true);
   assert.equal(JSON.stringify(status).includes('private words'), false);
+});
+
+test('voice upload accepts private audio within the WhatsApp media limit', () => {
+  const audio = Buffer.from('audio');
+  const result = validateVoiceUpload({
+    chatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    audio,
+    mimetype: 'audio/ogg',
+  });
+  assert.equal(result.audio, audio);
+  assert.equal(result.mimetype, 'audio/ogg');
+  assert.throws(() => validateVoiceUpload({
+    chatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    audio: Buffer.alloc(16 * 1024 * 1024 + 1),
+    mimetype: 'audio/ogg',
+  }), /16 MB/);
+  assert.throws(() => validateVoiceUpload({
+    chatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    audio,
+    mimetype: 'text/plain',
+  }), /audio file/);
 });
 
 test('WhatsApp chat updates preserve archive and inbox state', () => {

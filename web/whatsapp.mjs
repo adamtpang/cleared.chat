@@ -639,8 +639,7 @@ function updateVoiceProgress(stored, progress = {}) {
   scheduleSave();
 }
 
-function queueVoiceTranscription(jid, proto, stored) {
-  const id = String(proto.key?.id || stored.key || 'voice');
+function startVoiceTranscriptionJob({ jid, stored, id, mimetype, initialStage, initialDetail, loadAudio }) {
   const jobKey = `${jid}:${id}`;
   if (voiceJobs.has(jobKey)) return voiceJobs.get(jobKey);
   if (stored.transcriptionStatus === 'complete') return Promise.resolve(stored);
@@ -648,17 +647,17 @@ function queueVoiceTranscription(jid, proto, stored) {
   stored.kind = 'voice';
   stored.transcriptionStatus = 'transcribing';
   stored.transcriptionError = null;
-  stored.text = '[voice note, downloading audio]';
+  stored.text = '[voice note, preparing audio]';
   updateVoiceProgress(stored, {
-    stage: 'downloading-audio',
-    detail: 'The encrypted audio message is available. Downloading it now.',
+    stage: initialStage,
+    detail: initialDetail,
     percent: 0,
     processedSeconds: 0,
     durationSeconds: Number(stored.seconds) || 0,
   });
   const job = (async () => {
     try {
-      const audio = await downloadVoiceAudio(proto);
+      const audio = await loadAudio();
       updateVoiceProgress(stored, {
         stage: 'audio-received',
         detail: `Received ${audio.length} bytes of audio.`,
@@ -667,7 +666,7 @@ function queueVoiceTranscription(jid, proto, stored) {
       });
       const result = await transcribeVoiceBuffer(audio, {
         id,
-        mimetype: stored.mimetype,
+        mimetype: mimetype || stored.mimetype,
         onProgress: (progress) => updateVoiceProgress(stored, {
           ...progress,
           durationSeconds: Number(progress.durationSeconds) || Number(stored.seconds) || 0,
@@ -705,6 +704,19 @@ function queueVoiceTranscription(jid, proto, stored) {
   return job;
 }
 
+function queueVoiceTranscription(jid, proto, stored) {
+  const id = String(proto.key?.id || stored.key || 'voice');
+  return startVoiceTranscriptionJob({
+    jid,
+    stored,
+    id,
+    mimetype: stored.mimetype,
+    initialStage: 'downloading-audio',
+    initialDetail: 'The encrypted audio message is available. Downloading it now.',
+    loadAudio: () => downloadVoiceAudio(proto),
+  });
+}
+
 export function validateVoiceRetryRequest({ chatId, messageId } = {}) {
   const jid = canonicalWhatsAppJid(whatsappJid(chatId));
   if (!jid || !/@(?:s\.whatsapp\.net|g\.us|lid)$/.test(jid) || jid === 'status@broadcast') {
@@ -713,6 +725,41 @@ export function validateVoiceRetryRequest({ chatId, messageId } = {}) {
   const id = String(messageId || '').trim();
   if (!/^[A-Za-z0-9_-]{8,160}$/.test(id)) throw new Error('Choose a valid voice note.');
   return { jid, messageId: id };
+}
+
+export function validateVoiceUpload({ chatId, messageId, audio, mimetype } = {}) {
+  const request = validateVoiceRetryRequest({ chatId, messageId });
+  if (!Buffer.isBuffer(audio) || !audio.length) throw new Error('Choose a non-empty audio file.');
+  if (audio.length > 16 * 1024 * 1024) throw new Error('Audio must be 16 MB or smaller.');
+  const type = String(mimetype || 'application/octet-stream').toLowerCase();
+  if (!type.startsWith('audio/') && !['application/ogg', 'application/octet-stream'].includes(type)) {
+    throw new Error('Choose an audio file such as OGG, Opus, M4A, MP3, or WAV.');
+  }
+  return { ...request, audio, mimetype: type };
+}
+
+export function transcribeUploadedVoice(input = {}) {
+  if (!chatsById.size) loadStore();
+  const request = validateVoiceUpload(input);
+  const stored = (messagesById.get(request.jid) || []).find((message) => (
+    message.key === request.messageId && message.kind === 'voice'
+  ));
+  if (!stored) throw new Error('This voice note is not in the synced conversation.');
+  if (stored.transcriptionStatus === 'complete') return getVoiceTranscriptionStatus(input);
+
+  stored.transcriptionStartedAt = new Date().toISOString();
+  stored.transcriptionProgress = null;
+  stored.mimetype = request.mimetype;
+  startVoiceTranscriptionJob({
+    jid: request.jid,
+    stored,
+    id: request.messageId,
+    mimetype: request.mimetype,
+    initialStage: 'checking-audio',
+    initialDetail: 'Audio was uploaded directly. Checking the file now.',
+    loadAudio: async () => request.audio,
+  });
+  return getVoiceTranscriptionStatus(input);
 }
 
 export function getVoiceTranscriptionStatus(input = {}) {
