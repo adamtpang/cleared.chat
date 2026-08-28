@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { workerEnvironment, workerPaths } from './worker-manager.mjs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { WorkerManager, workerEnvironment, workerPaths } from './worker-manager.mjs';
 
 test('gives every account isolated WhatsApp and snapshot paths', () => {
   const first = workerPaths('/data', 'first-user');
@@ -33,4 +36,30 @@ test('hosted workers fall back to local ranking without an AI key', () => {
   });
   assert.equal(env.LLM, 'local');
   assert.equal(env.ANTHROPIC_API_KEY, '');
+});
+
+test('concurrent requests share one starting worker', async (t) => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'cleared-worker-race-'));
+  const manager = new WorkerManager({ dataDir, accountStore: { getSecret: () => '' } });
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+
+  let startCount = 0;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const worker = { child: { exitCode: null }, port: 45678, userId: 'account-id' };
+  manager.start = async () => {
+    startCount += 1;
+    await gate;
+    manager.workers.set('account-id', worker);
+    return worker;
+  };
+
+  const first = manager.get('account-id');
+  const second = manager.get('account-id');
+  release();
+  const [firstWorker, secondWorker] = await Promise.all([first, second]);
+
+  assert.equal(startCount, 1);
+  assert.equal(firstWorker, worker);
+  assert.equal(secondWorker, worker);
 });

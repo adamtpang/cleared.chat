@@ -70,7 +70,7 @@ export class WorkerManager {
 
   async get(userId) {
     const existing = this.workers.get(userId);
-    if (existing?.child.exitCode === null) return existing;
+    if (existing?.child?.exitCode === null) return existing;
     if (existing?.starting) return existing.starting;
     const record = { starting: null };
     record.starting = this.start(userId);

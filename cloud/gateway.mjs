@@ -177,12 +177,18 @@ export function createGateway(options = {}) {
   const clerkAuthorizedParties = options.clerkAuthorizedParties || String(
     process.env.CLERK_AUTHORIZED_PARTIES || process.env.APP_ORIGIN || (production ? 'https://app.cleared.chat' : 'http://127.0.0.1'),
   ).split(',').map((value) => value.trim()).filter(Boolean);
+  const clerkAuthDebug = options.clerkAuthDebug ?? process.env.CLERK_AUTH_DEBUG === '1';
 
   const authenticateClerk = async (req) => {
     const state = await clerk.authenticateRequest(webRequest(req), {
       authorizedParties: clerkAuthorizedParties,
     });
-    if (!state.isAuthenticated) return { state, auth: null, user: null };
+    if (!state.isAuthenticated) {
+      if (clerkAuthDebug) {
+        console.warn('[clerk-auth]', JSON.stringify({ status: state.status, reason: state.reason, message: state.message }));
+      }
+      return { state, auth: null, user: null };
+    }
 
     const auth = state.toAuth();
     let user = accounts.userForClerkId(auth.userId);
