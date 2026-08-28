@@ -137,6 +137,41 @@ function appHeaders(clerkFrontendApi = '') {
   };
 }
 
+function hostedAppHtml(html, { publishableKey, frontendApi } = {}) {
+  if (!publishableKey || !frontendApi) return html;
+  const key = JSON.stringify(String(publishableKey)).replaceAll('<', '\\u003c');
+  const scriptUrl = JSON.stringify(`${String(frontendApi).replace(/\/$/, '')}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`)
+    .replaceAll('<', '\\u003c');
+  const bootstrap = `<script
+    crossorigin="anonymous"
+    data-clerk-publishable-key=${key}
+    src=${scriptUrl}
+  ></script>
+  <script>
+    (() => {
+      const nativeFetch = window.fetch.bind(window);
+      const clerkReady = (async () => {
+        await window.Clerk.load();
+        return window.Clerk;
+      })();
+      window.__clearedClerkReady = clerkReady;
+      window.fetch = async (input, init = {}) => {
+        const requestUrl = new URL(input instanceof Request ? input.url : input, location.href);
+        if (requestUrl.origin !== location.origin || !requestUrl.pathname.startsWith('/api/')) {
+          return nativeFetch(input, init);
+        }
+        const clerk = await clerkReady.catch(() => null);
+        const token = clerk?.session ? await clerk.session.getToken() : '';
+        const headers = new Headers(input instanceof Request ? input.headers : undefined);
+        new Headers(init.headers || {}).forEach((value, name) => headers.set(name, value));
+        if (token && !headers.has('authorization')) headers.set('authorization', 'Bearer ' + token);
+        return nativeFetch(input, { ...init, headers });
+      };
+    })();
+  </script>`;
+  return html.replace('<head>', `<head>${bootstrap}`);
+}
+
 async function proxyToWorker(req, res, worker) {
   const method = req.method || 'GET';
   const body = ['GET', 'HEAD'].includes(method) ? undefined : await readBody(req, 2 * 1024 * 1024);
@@ -322,7 +357,10 @@ export function createGateway(options = {}) {
         return send(res, 200, JSON.stringify({ email: user.email, aiReady: platformAi || accounts.hasSecret(user.id, 'anthropic_api_key') }), 'application/json; charset=utf-8');
       }
       if (req.method === 'GET' && ['/app', '/app/'].includes(url.pathname)) {
-        return send(res, 200, readFileSync(WEB_APP, 'utf8'), 'text/html; charset=utf-8', appHeaders(clerkFrontendApi));
+        const html = hostedAppHtml(readFileSync(WEB_APP, 'utf8'), clerkConfigured
+          ? { publishableKey: clerkPublishableKey, frontendApi: clerkFrontendApi }
+          : {});
+        return send(res, 200, html, 'text/html; charset=utf-8', appHeaders(clerkFrontendApi));
       }
       if (url.pathname.startsWith('/api/')) {
         const worker = await workers.get(user.id);

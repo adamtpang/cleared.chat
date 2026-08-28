@@ -1151,6 +1151,7 @@
   let waStartedAt = 0;
   let waLastLoadedCount = -1;
   let waReloadPending = false;
+  let waAutoOpened = false;
   function maybeReloadWhatsAppInbox(d){
     const count = Number(d?.counts?.active || 0);
     if(count <= 0 || count === waLastLoadedCount || waReloadPending) return;
@@ -1228,6 +1229,10 @@
         $('#wapairresult').innerHTML = '<div class="pairdetail">Not linked yet. Select Show QR to begin. The QR normally appears within 5 to 15 seconds.</div>';
         qrButton.disabled = false;
         qrButton.textContent = 'Show QR';
+        if(!waAutoOpened){
+          waAutoOpened = true;
+          $('#setmodal').classList.add('on');
+        }
       }
       return d;
     }catch(e){

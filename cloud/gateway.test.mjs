@@ -89,7 +89,9 @@ test('Clerk Google login reuses an existing account and protects anonymous reque
         headers.append('set-cookie', '__refresh=test-refresh; Path=/; HttpOnly');
         return { isAuthenticated: false, status: 'handshake', headers };
       }
-      const userId = request.headers.get('x-test-clerk-user');
+      const bearer = request.headers.get('authorization');
+      const userId = request.headers.get('x-test-clerk-user')
+        || (bearer === 'Bearer fresh-browser-token' ? 'user_google_owner' : '');
       if (!userId) return { isAuthenticated: false, status: 'signed-out', headers: new Headers() };
       return {
         isAuthenticated: true,
@@ -151,10 +153,19 @@ test('Clerk Google login reuses an existing account and protects anonymous reque
   ]);
 
   const account = await fetch(`${base}/api/account`, {
-    headers: { 'x-test-clerk-user': 'user_google_owner' },
+    headers: { authorization: 'Bearer fresh-browser-token' },
   });
   assert.equal(account.status, 200);
   assert.deepEqual(await account.json(), { email: 'owner@example.com', aiReady: false });
   assert.equal(gateway.accounts.userForClerkId('user_google_owner').id, original.id);
   assert.equal(gateway.accounts.listUserIds().length, 1);
+
+  const app = await fetch(`${base}/app`, {
+    headers: { authorization: 'Bearer fresh-browser-token' },
+  });
+  assert.equal(app.status, 200);
+  const appHtml = await app.text();
+  assert.match(appHtml, /clerk\.test\/npm\/@clerk\/clerk-js/);
+  assert.match(appHtml, /clerk\.session\.getToken/);
+  assert.match(appHtml, /authorization', 'Bearer '/);
 });
