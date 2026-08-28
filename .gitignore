@@ -25,6 +25,8 @@ desktop/dist/
 desktop/release/
 desktop/out/
 desktop/cleared-chat-*.png
+desktop/*-ui.png
+desktop/*-voice.png
 
 # triage snapshots (private inbox data)
 snapshots/
@@ -38,6 +40,7 @@ snapshots/
 .claude/settings.json
 web/inbox-triage-result.json
 web/export-eddie.mjs
+docs/beeper-careers-community.md
 
 # our own WhatsApp session (Baileys pairing) — never commit
 web/wa-auth/
