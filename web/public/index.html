@@ -1950,9 +1950,11 @@
     const voiceLabel = voice
       ? '<div class="voice-note-label">Voice note'+(m.seconds ? ' · '+Math.floor(m.seconds/60)+':'+String(Math.round(m.seconds%60)).padStart(2,'0') : '')+'</div>'
       : '';
+    const timestamp = messageTime(m.timestamp);
+    const metadata = [m.isSender ? 'you' : (m.senderName || ''), timestamp].filter(Boolean).join(' · ');
     return '<div class="bubble '+(m.isSender?'me':'them')+(voice?' voice-note':'')+'">'
       + voiceLabel + '<div class="'+(voice?'voice-note-text':'')+'">'+esc(text)+'</div>'
-      + '<div class="bmeta">'+esc(m.isSender ? 'you' : (m.senderName||''))+' · '+esc(agoOf(m.timestamp))+'</div>'
+      + '<div class="bmeta" title="'+attr(messageDateTitle(m.timestamp))+'">'+esc(metadata)+'</div>'
       + '</div>';
   }
 
@@ -2210,6 +2212,32 @@
     if(d < 1) return Math.round(d*24)+'h';
     if(d < 30) return Math.round(d)+'d';
     return Math.round(d/30)+'mo';
+  }
+
+  function messageTime(ts){
+    if(!ts) return '';
+    const date = new Date(ts);
+    if(Number.isNaN(date.getTime())) return '';
+    const now = new Date();
+    const time = new Intl.DateTimeFormat(undefined, {hour:'numeric', minute:'2-digit'}).format(date);
+    const sameDay = date.getFullYear() === now.getFullYear()
+      && date.getMonth() === now.getMonth()
+      && date.getDate() === now.getDate();
+    if(sameDay) return time;
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    if(date.getFullYear() === yesterday.getFullYear()
+      && date.getMonth() === yesterday.getMonth()
+      && date.getDate() === yesterday.getDate()) return 'Yesterday, ' + time;
+    const dateLabel = new Intl.DateTimeFormat(undefined, {
+      day:'numeric', month:'short', ...(date.getFullYear() !== now.getFullYear() ? {year:'numeric'} : {})
+    }).format(date);
+    return dateLabel + ', ' + time;
+  }
+
+  function messageDateTitle(ts){
+    if(!ts) return '';
+    const date = new Date(ts);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
   }
 
   async function runTriage(){
