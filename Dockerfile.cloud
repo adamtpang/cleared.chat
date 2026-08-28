@@ -12,12 +12,12 @@ RUN npm ci --omit=dev
 COPY web/package.json web/package-lock.json ./web/
 RUN cd web && npm ci --omit=dev
 
+RUN python3 -m venv /opt/cleared-voice \
+  && /opt/cleared-voice/bin/pip install --no-cache-dir faster-whisper
+
 COPY web ./web
 COPY cloud ./cloud
 COPY icon.svg ./icon.svg
-
-RUN python3 -m venv /opt/cleared-voice \
-  && /opt/cleared-voice/bin/pip install --no-cache-dir faster-whisper
 
 ENV NODE_ENV=production \
   CLOUD_DATA_DIR=/data \

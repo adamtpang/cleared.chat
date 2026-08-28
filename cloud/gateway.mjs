@@ -232,7 +232,19 @@ export function createGateway(options = {}) {
       const sessionToken = parseCookies(req.headers.cookie)[COOKIE] || '';
       const clerkIdentity = clerkConfigured ? await authenticateClerk(req) : null;
       if (clerkIdentity?.state.status === 'handshake') {
-        res.writeHead(307, clerkStateHeaders(clerkIdentity.state.headers));
+        const headers = clerkStateHeaders(clerkIdentity.state.headers);
+        if (clerkAuthDebug) {
+          const cookies = Array.isArray(headers['Set-Cookie']) ? headers['Set-Cookie'] : [];
+          console.warn('[clerk-handshake]', JSON.stringify({
+            callback: url.searchParams.has('__clerk_handshake'),
+            locationHost: (() => {
+              try { return new URL(headers.location, requestOrigin(req)).host; } catch { return ''; }
+            })(),
+            cookieCount: cookies.length,
+            cookieNames: cookies.map((cookie) => cookie.slice(0, cookie.indexOf('='))).filter(Boolean),
+          }));
+        }
+        res.writeHead(307, headers);
         return res.end();
       }
       const user = clerkConfigured ? clerkIdentity.user : accounts.userForSession(sessionToken);
