@@ -18,6 +18,7 @@ __pycache__/
 Thumbs.db
 
 .vercel
+.cloud-data/
 
 # build output (electron-builder)
 dist/

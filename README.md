@@ -39,6 +39,23 @@ remaining loop in validated chunks. Task-first conversations receive a concrete
 prerequisite and an editable holding draft. Every reply-owed conversation has a
 visible next action.
 
+## Hosted accounts
+
+The hosted beta adds normal email and password accounts around the same inbox.
+After signing in, each account gets an isolated WhatsApp worker, credential
+directory, message cache, triage history, and encrypted AI settings. Pair from
+the inbox Settings panel once, then the server keeps that linked-device session
+connected and syncing even when the browser is closed.
+
+The public landing page stays on Vercel. The private app runs as a persistent
+container behind `app.cleared.chat`, because WhatsApp linking needs a durable
+process and durable storage. See [`cloud/README.md`](cloud/README.md) for the
+deployment boundary and required volume.
+
+The hosted assistant can use a platform Anthropic key or a key saved by the
+account owner. User keys are encrypted before storage and never enter the
+browser again. Without an AI key, deterministic local triage remains available.
+
 ## Parity boundary
 
 The daily workflow now covers direct pairing, active conversation sync, received
@@ -106,5 +123,7 @@ Important paths:
 | `web/voice-transcriber.mjs` | Private local voice-note transcription worker |
 | `web/public/index.html` | Two-pane inbox and guided voice review |
 | `desktop/main.js` | Electron shell and native Windows dictation bridge |
+| `cloud/gateway.mjs` | Hosted accounts, secure sessions, and per-user routing |
+| `cloud/worker-manager.mjs` | Isolated persistent worker lifecycle |
 | `web/fates.mjs` | Deterministic open-loop calibration |
 | `web/snapshots/` | Ranked inbox snapshots and voice-created tasks |

@@ -4,15 +4,21 @@ Guidance for Claude Code working in this repo.
 
 ## What this is
 
-cleared.chat is a local-first Electron messaging client with a browser-based
-development mode. It connects directly to WhatsApp through Baileys, restores a
-saved linked-device session on startup, ranks open loops by importance x
-urgency, transcribes received voice notes, and prepares editable drafts.
+cleared.chat is a local-first messaging client with Electron, local browser,
+and hosted browser modes. It connects directly to WhatsApp through Baileys,
+restores a saved linked-device session on startup, ranks open loops by
+importance x urgency, transcribes received voice notes, and prepares editable
+drafts.
 
 The runtime is `web/server.mjs`, the direct WhatsApp adapter is
 `web/whatsapp.mjs`, the interface is `web/public/index.html`, and the desktop
 shell is `desktop/main.js`. Gmail and Discord are optional adapters. The Beeper
 Desktop adapter is legacy, disabled by default, and not required.
+
+Hosted accounts enter through `cloud/gateway.mjs`. Each account is routed to an
+isolated `web/server.mjs` worker with separate WhatsApp credentials, messages,
+snapshots, and encrypted AI settings. `Dockerfile.cloud` is the persistent
+container runtime. The volume must be mounted at `/data`.
 
 ## The one rule
 
@@ -39,6 +45,8 @@ action manually.
   WhatsApp auth stores are private and gitignored.
 - Never deploy private runtime state. Vercel receives only `index.html`,
   `icon.svg`, `robots.txt`, and `sitemap.xml` via `.vercelignore`.
+- Hosted deployments start with an empty persistent volume. Never copy local
+  WhatsApp credentials, messages, snapshots, or account data into an image.
 
 ## Development
 

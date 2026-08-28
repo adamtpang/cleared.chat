@@ -1,0 +1,10 @@
+{
+  "name": "cleared-chat",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start:cloud": "node cloud/gateway.mjs",
+    "test": "node --test web/*.test.mjs cloud/*.test.mjs"
+  }
+}

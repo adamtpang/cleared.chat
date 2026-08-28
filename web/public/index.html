@@ -549,6 +549,7 @@
         <button onclick="bumpZoom(-0.05)" title="smaller">-</button><span class="pct" id="zoompct">100%</span><button onclick="bumpZoom(0.05)" title="bigger">+</button>
         <button id="compactbtn" style="padding:0 10px;font-size:11px" onclick="toggleCompact()" title="tighter spacing">compact</button>
       </div>
+      <a class="act" id="accountbtn" href="/account" title="Account" hidden>Account</a>
       <button class="act" onclick="openSettings()" title="Settings">Settings</button>
       <button class="act" id="loadall" onclick="loadEverything()" hidden>Reload everything</button>
       <button class="act" id="run" onclick="runTriage()" hidden>Run triage</button>
@@ -775,9 +776,23 @@
   // click) made an empty app look broken; nothing here calls a model, so it
   // is cheap enough to just do.
   window.addEventListener("DOMContentLoaded", () => {
+    loadAccountState();
     loadEverything().then(() => loadLatestTriage(true));
     setTimeout(refreshWhatsAppStatus, 250);
   });
+
+  async function loadAccountState(){
+    try {
+      const response = await fetch('/api/account');
+      if (!response.ok) return;
+      const account = await response.json();
+      const button = $('#accountbtn');
+      button.hidden = false;
+      button.title = account.email ? `Account: ${account.email}` : 'Account';
+    } catch {
+      // The local app has no account gateway, so this control stays hidden.
+    }
+  }
 
   // ---------- relationship radar ----------
   const RGROUPS = [
