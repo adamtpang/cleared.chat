@@ -287,11 +287,20 @@ export function createGateway(options = {}) {
       if (req.method === 'GET' && url.pathname === '/') {
         return user ? redirect(res, '/app') : redirect(res, '/login');
       }
-      if (req.method === 'GET' && ['/login', '/signup'].includes(url.pathname)) {
+      if (req.method === 'GET' && url.pathname === '/signup' && clerkConfigured) {
+        return redirect(res, '/login');
+      }
+      if (req.method === 'GET' && ['/login', '/signup', '/sso-callback'].includes(url.pathname)) {
         if (user) return redirect(res, '/app');
+        if (url.pathname === '/sso-callback' && !clerkConfigured) return redirect(res, '/login');
         const error = url.searchParams.get('error') || '';
         const page = clerkConfigured
-          ? clerkAuthPage({ publishableKey: clerkPublishableKey, frontendApi: clerkFrontendApi, error })
+          ? clerkAuthPage({
+            publishableKey: clerkPublishableKey,
+            frontendApi: clerkFrontendApi,
+            error,
+            callback: url.pathname === '/sso-callback',
+          })
           : authPage({ mode: url.pathname.slice(1), error });
         return send(res, 200, page, 'text/html; charset=utf-8', appHeaders(clerkFrontendApi));
       }

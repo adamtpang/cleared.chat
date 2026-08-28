@@ -138,6 +138,17 @@ test('Clerk Google login reuses an existing account and protects anonymous reque
   const loginHtml = await login.text();
   assert.match(loginHtml, /Continue with Google/);
   assert.match(loginHtml, /clerk\.test\/npm\/@clerk\/clerk-js/);
+  assert.match(loginHtml, /authenticateWithRedirect/);
+  assert.doesNotMatch(loginHtml, /Email address/);
+  assert.doesNotMatch(loginHtml, /Sign up/);
+
+  const signup = await fetch(`${base}/signup`, { redirect: 'manual' });
+  assert.equal(signup.status, 303);
+  assert.equal(signup.headers.get('location'), '/login');
+
+  const callback = await fetch(`${base}/sso-callback`);
+  assert.equal(callback.status, 200);
+  assert.match(await callback.text(), /handleRedirectCallback/);
 
   const anonymous = await fetch(`${base}/api/account`);
   assert.equal(anonymous.status, 401);

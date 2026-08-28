@@ -22,7 +22,8 @@ h1{font-size:26px;line-height:1.15;letter-spacing:0;margin:0 0 8px}p{margin:0 0 
 form{display:grid;gap:14px}.field{display:grid;gap:6px}label{font-size:12px;font-weight:700;color:var(--muted)}input{width:100%;border:1px solid var(--line);border-radius:6px;padding:11px 12px;font:inherit;color:var(--ink);outline:0}input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(8,125,134,.1)}
 button.primary{border:0;border-radius:6px;padding:12px 16px;background:var(--brand);color:#fff;font:inherit;font-weight:800;cursor:pointer}button.primary:hover{background:#075f66}.error{border:1px solid #f4c7c3;background:#fff5f4;color:var(--danger);padding:10px 12px;border-radius:6px;margin-bottom:16px}.fine{font-size:12px;color:var(--muted);margin-top:16px}
 .account{display:grid;gap:18px}.row{border-top:1px solid var(--line);padding-top:18px}.status{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--brand);margin-bottom:10px}.status i{width:7px;height:7px;border-radius:50%;background:currentColor}.actions{display:flex;gap:10px;flex-wrap:wrap}.ghost{border:1px solid var(--line);background:#fff;border-radius:6px;padding:9px 12px;font:inherit;font-weight:700;cursor:pointer}.nav{display:flex;align-items:center;gap:14px;font-size:13px}.nav form{display:block}.nav button{border:0;background:none;color:var(--muted);font:inherit;cursor:pointer;padding:0}
-.auth-shell{display:grid;gap:18px}.auth-mount{min-height:330px;display:grid;place-items:center}.loader{display:grid;justify-items:center;gap:12px;color:var(--muted);font-size:13px}.spinner{width:24px;height:24px;border:2px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.auth-shell{display:grid;gap:18px}.auth-mount{min-height:120px;display:grid;align-content:center;gap:12px}.loader{display:grid;justify-items:center;gap:12px;color:var(--muted);font-size:13px}.spinner{width:24px;height:24px;border:2px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.google-button{width:100%;min-height:48px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:10px;font:inherit;font-weight:800;cursor:pointer}.google-button:hover{background:#f7fafa}.google-button:disabled{opacity:.6;cursor:wait}.google-mark{width:22px;height:22px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;color:#4285f4;font-weight:800}.auth-status{min-height:20px;text-align:center;color:var(--muted);font-size:12px}.auth-status.error{border:0;background:transparent;padding:0;color:var(--danger)}
 </style>
 </head><body><div class="page">${body}</div></body></html>`;
 
@@ -44,44 +45,59 @@ export function authPage({ mode = 'login', error = '' } = {}) {
   </section></main>`);
 }
 
-export function clerkAuthPage({ publishableKey, frontendApi, error = '' } = {}) {
+export function clerkAuthPage({ publishableKey, frontendApi, error = '', callback = false } = {}) {
   return shell('Sign in', `
   <header class="top"><a class="brand" href="https://cleared.chat"><span class="dot"></span>cleared.chat</a><a href="https://cleared.chat">About</a></header>
   <main class="main"><section class="panel auth-shell">
     <div><h1>Clear your messaging inbox</h1><p>Continue with Google, pair WhatsApp once, then work every open loop in priority order.</p></div>
     ${error ? `<div class="error">${esc(error)}</div>` : ''}
-    <div id="clerk-auth" class="auth-mount"><div class="loader"><span class="spinner"></span><span>Preparing secure sign in</span></div></div>
+    <div class="auth-mount">
+      ${callback ? '<div class="loader"><span class="spinner"></span><span>Finishing secure sign in</span></div>' : '<button id="google-signin" class="google-button" type="button" disabled><span class="google-mark">G</span><span>Continue with Google</span></button>'}
+      <div id="clerk-status" class="auth-status">${callback ? '' : 'Preparing secure sign in'}</div>
+    </div>
     <div class="fine">Your WhatsApp credentials and messages are isolated from every other account. cleared.chat never sends messages.</div>
   </section></main>
-  <script defer crossorigin="anonymous" src="${esc(frontendApi)}/npm/@clerk/ui@1/dist/ui.browser.js"></script>
   <script defer crossorigin="anonymous" data-clerk-publishable-key="${esc(publishableKey)}" src="${esc(frontendApi)}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>
   <script>
     window.addEventListener('load', async function () {
-      const mount = document.getElementById('clerk-auth');
+      const status = document.getElementById('clerk-status');
+      const button = document.getElementById('google-signin');
       try {
-        await Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
+        await Clerk.load();
         if (Clerk.isSignedIn) {
           location.replace('/app');
           return;
         }
-        Clerk.mountSignIn(mount, {
-          routing: 'hash',
-          fallbackRedirectUrl: '/app',
-          signUpFallbackRedirectUrl: '/app',
-          appearance: {
-            variables: {
-              colorPrimary: '#087d86',
-              colorText: '#152124',
-              colorBackground: '#ffffff',
-              colorInputBackground: '#ffffff',
-              colorInputText: '#152124',
-              borderRadius: '6px',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif'
-            }
+        if (${callback ? 'true' : 'false'}) {
+          await Clerk.handleRedirectCallback({
+            signInUrl: '/login',
+            signUpUrl: '/login',
+            signInFallbackRedirectUrl: '/app',
+            signUpFallbackRedirectUrl: '/app'
+          });
+          return;
+        }
+        button.disabled = false;
+        status.textContent = '';
+        button.addEventListener('click', async function () {
+          button.disabled = true;
+          status.className = 'auth-status';
+          status.textContent = 'Opening Google';
+          try {
+            await Clerk.client.signIn.authenticateWithRedirect({
+              strategy: 'oauth_google',
+              redirectUrl: '/sso-callback',
+              redirectUrlComplete: '/app'
+            });
+          } catch (error) {
+            button.disabled = false;
+            status.className = 'auth-status error';
+            status.textContent = 'Google sign in could not start. Refresh and try again.';
           }
         });
       } catch (error) {
-        mount.innerHTML = '<div class="error">Google sign in could not load. Refresh the page and try again.</div>';
+        status.className = 'auth-status error';
+        status.textContent = 'Google sign in could not load. Refresh and try again.';
       }
     });
   </script>`);
