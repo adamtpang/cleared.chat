@@ -95,6 +95,12 @@ reply. Previous and Next move within the ranked queue without changing WhatsApp.
 priority. `Show inbox` returns to the complete ranked list. The preference is
 restored with the latest saved triage after reload.
 
+A visible AI-output banner distinguishes a current model-backed triage from an
+old offline snapshot. It reports the number of unsent drafts and task chats,
+links directly into Focus, and offers `Run fresh triage` when a restored run has
+tasks but no AI drafts. Never hide the offline or stale-snapshot explanation in
+a non-rendered status element.
+
 WhatsApp protocol, key-distribution, history-sync, and app-state events are
 control traffic. `web/whatsapp.mjs` drops them at ingestion and removes old
 placeholders while loading the local store. Never expose them as chat messages

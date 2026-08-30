@@ -97,6 +97,12 @@
   .pill.hot b{color:var(--danger)}
   .snapnote{font-size:12.5px;color:var(--muted-foreground);margin:-2px 0 14px}
   .snapnote a{color:var(--brand-light);font-weight:600}
+  .triage-notice{display:flex;align-items:center;gap:var(--space-3x);padding:10px var(--space-5x);border-bottom:1px solid var(--line);background:var(--bg);flex:none}
+  .triage-notice[hidden]{display:none}
+  .triage-notice .notice-copy{min-width:0;flex:1}
+  .triage-notice .notice-title{font-size:12.5px;font-weight:800;color:var(--ink)}
+  .triage-notice .notice-detail{font-size:11.5px;color:var(--muted-foreground);margin-top:2px}
+  .triage-notice.warn{background:color-mix(in oklch,var(--warn) 9%,var(--bg));border-bottom-color:color-mix(in oklch,var(--warn) 30%,var(--line))}
 
   /* 80/20 strip + ranked index */
   .cut8020{background:var(--card);border:1px solid var(--line-2);border-left:3px solid var(--primary);color:var(--ink);border-radius:var(--r-lg);padding:var(--space-4x) var(--space-5x);margin-bottom:var(--space-3x)}
@@ -669,6 +675,7 @@
         <button class="act" onclick="exitFocusMode()">Show inbox</button>
       </div>
     </div>
+    <div class="triage-notice" id="triagenotice" hidden></div>
     <div class="voicebar" id="voicebar">
       <div class="voicecopy">
         <div class="voicecount" id="voicecount">Voice review</div>
@@ -2575,6 +2582,33 @@
     }
   }
 
+  function showTriageOutputStatus(data, action){
+    const notice = $('#triagenotice');
+    const items = Array.isArray(action) ? action : [];
+    if(!items.length){
+      notice.hidden = true;
+      notice.innerHTML = '';
+      return;
+    }
+    const llm = String(data?.llm || '');
+    const offline = /local|heuristic|offline/i.test(llm);
+    const drafts = items.filter((item) => String(item.draft || '').trim()).length;
+    const taskChats = items.filter((item) => taskListFor(item).length > 0).length;
+    const staleScope = data?.scope && data.scope !== 'whatsapp-triage';
+    const warning = offline || drafts === 0 || staleScope;
+    const title = warning ? 'Tasks found, AI drafts missing' : 'AI tasks and drafts are ready';
+    const detail = warning
+      ? taskChats + ' task chat' + (taskChats === 1 ? '' : 's') + ' restored. This saved run used '
+        + (offline ? 'offline ranking' : 'an older triage') + ', so it did not create current AI replies.'
+      : drafts + ' unsent draft' + (drafts === 1 ? '' : 's') + ' and ' + taskChats
+        + ' task chat' + (taskChats === 1 ? '' : 's') + ' are available in Focus.';
+    notice.classList.toggle('warn', warning);
+    notice.hidden = false;
+    notice.innerHTML = '<div class="notice-copy"><div class="notice-title">'+esc(title)+'</div>'
+      + '<div class="notice-detail">'+esc(detail)+'</div></div>'
+      + (warning ? '<button class="act primary" onclick="runTriage()">Run fresh triage</button>' : '<button class="act" onclick="enterFocusMode()">Open Focus</button>');
+  }
+
   async function loadLatestTriage(openWhenReady){
     try{
       const data = await (await fetch('/api/inbox/latest')).json();
@@ -2591,6 +2625,7 @@
       const action = actionQueue(LATEST_TRIAGE_ITEMS);
       $('#cntPriority').textContent = action.length;
       setVoiceQueue(action);
+      showTriageOutputStatus(data, action);
       updateFocusBar();
       if(action.length && (openWhenReady || localStorage.getItem('cc-focus-mode') === '1')) await enterFocusMode(action[0].chatId);
       else if(TAB === 'priorities') renderFates(LATEST_TRIAGE_ITEMS, LATEST_TRIAGE_META);
@@ -2777,6 +2812,7 @@
       const taskCount = action.filter(it => it.fate === 'F2_BLOCK').length;
       const draftCount = action.filter(it => it.draft).length;
       $('#summary').innerHTML = pill(topN,'do first') + pill(taskCount,'tasks before reply') + pill(draftCount,'unsent drafts');
+      showTriageOutputStatus(data, action);
       let snapHtml = '';
       if (data.note) snapHtml += '<div class="snapnote">'+esc(noEm(data.note))+'</div>';
       if (localMode) snapHtml += '<div class="snapnote">Local ranking only (no model drafts). Paste voice yourself or switch LLM=grok.</div>';
