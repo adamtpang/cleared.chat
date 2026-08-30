@@ -432,6 +432,7 @@
   /* ---- real composer (primary), draft assistant demoted to a feature ---- */
   .composer{display:flex;align-items:flex-end;gap:var(--space-2x);padding:var(--space-3x) var(--space-5x);
     border-top:1px solid var(--line);background:var(--bg);flex:none}
+  .composer-label{display:none}
   .composer textarea{flex:1;font-family:var(--font);font-size:14px;line-height:1.5;background:var(--surface-2);
     color:var(--ink);border:1px solid var(--line-2);border-radius:24px;padding:11px 16px;outline:none;resize:none;
     max-height:140px;min-height:44px;transition:border-color 100ms var(--ease-out)}
@@ -452,6 +453,12 @@
   .voicectls{display:flex;align-items:center;gap:6px;flex:none}
   .voicebar.listening{background:rgb(from var(--danger) r g b / 9%)}
   .voicebar.listening #micbtn{background:var(--danger)}
+  .focusbar{display:none;align-items:center;gap:var(--space-3x);padding:10px var(--space-5x);border-bottom:1px solid var(--line);background:var(--accent);flex:none}
+  .focusbar.on{display:flex}
+  .focuscopy{min-width:0;flex:1}
+  .focuscount{font-size:13px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+  .focusstatus{font-size:12px;color:var(--muted-foreground);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .focusactions{display:flex;align-items:center;gap:6px;flex:none}
   .aipanel{display:none;border-top:1px solid var(--line);background:var(--surface);padding:var(--space-3x) var(--space-5x)}
   .aipanel.on{display:block}
   .aipanel .aihead{display:flex;align-items:center;gap:var(--space-2x);margin-bottom:var(--space-2x)}
@@ -483,6 +490,9 @@
     body.sidebar-collapsed .app-shell{grid-template-columns:minmax(0,1fr)}
     body.sidebar-collapsed .sidebar{display:none}
     body.sidebar-collapsed .chatpane{grid-column:1}
+    body.focus-mode .app-shell{grid-template-columns:minmax(0,1fr)}
+    body.focus-mode .sidebar{display:none}
+    body.focus-mode .chatpane{grid-column:1}
   }
 
   /* left: search + every chat and email */
@@ -522,10 +532,42 @@
   .mobile-chat-actions .menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--ink);font:600 13px var(--font);padding:11px 12px;border-radius:6px;cursor:pointer}
   .mobile-chat-actions .menu button:hover{background:var(--hover)}
   .chatbody{flex:1;min-height:0;overflow:auto;padding:var(--space-5x);display:flex;flex-direction:column;gap:var(--space-2x)}
+  .chat-brief{align-self:stretch;border:1px solid var(--line-2);background:var(--bg);border-radius:var(--r-md);padding:var(--space-3x);margin-bottom:var(--space-2x)}
+  .chat-brief .brief-kicker{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--brand-light)}
+  .chat-brief .brief-summary{font-size:13.5px;font-weight:650;color:var(--ink);margin-top:5px;line-height:1.45}
+  .chat-brief .brief-action{font-size:12.5px;color:var(--muted-foreground);margin-top:6px;line-height:1.45}
+  .chat-brief .brief-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);gap:var(--space-3x);margin-top:var(--space-3x)}
+  .chat-brief .brief-block{border:1px solid var(--line);background:var(--surface);border-radius:var(--r-md);padding:var(--space-3x)}
+  .chat-brief .brief-label{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:7px}
+  .chat-brief .brief-task-list{display:grid;gap:7px;list-style:none}
+  .chat-brief .brief-task{display:flex;gap:8px;font-size:13px;line-height:1.45;color:var(--ink)}
+  .chat-brief .brief-task::before{content:"";width:15px;height:15px;border:1.5px solid var(--line-2);border-radius:4px;flex:none;margin-top:2px}
+  .chat-brief .brief-ready{font-size:13px;color:var(--ok);font-weight:650;line-height:1.45}
+  .chat-brief .brief-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .unread-divider{display:flex;align-items:center;gap:10px;color:var(--primary);font-size:11px;font-weight:800;margin:4px 0 8px}
+  .unread-divider::before,.unread-divider::after{content:"";height:1px;background:color-mix(in oklch,var(--primary) 42%,transparent);flex:1}
+  .earlier-toggle{align-self:center;border:1px solid var(--line-2);background:var(--bg);color:var(--muted-foreground);font:650 11.5px var(--font);padding:6px 11px;border-radius:var(--r-full);cursor:pointer;margin-bottom:4px}
+  .earlier-toggle:hover{border-color:var(--brand);color:var(--ink)}
+  .earlier-messages{display:contents}
+  .earlier-messages[hidden]{display:none!important}
+  .bubble-wrap{display:flex;flex-direction:column;max-width:min(30rem,74%);position:relative}
+  .bubble-wrap.them{align-self:flex-start;align-items:flex-start}
+  .bubble-wrap.me{align-self:flex-end;align-items:flex-end}
+  .bubble-wrap .bubble{max-width:100%;align-self:auto}
   .bubble{max-width:min(30rem,74%);font-size:14px;line-height:1.5;padding:9px 13px;border-radius:14px;white-space:pre-wrap;word-break:break-word}
   .bubble.them{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:5px}
   .bubble.me{align-self:flex-end;background:var(--primary);color:var(--primary-foreground);border-bottom-right-radius:5px}
   .bubble .bmeta{font-size:10.5px;opacity:.65;margin-top:4px}
+  .message-reactions{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px}
+  .message-reaction{font-size:13px;line-height:1;border:1px solid var(--line-2);background:var(--bg);border-radius:var(--r-full);padding:3px 6px}
+  .message-reaction.mine{border-color:var(--brand);background:color-mix(in oklch,var(--brand) 12%,var(--bg))}
+  .react-picker{position:relative;margin-top:2px;z-index:2}
+  .react-picker>summary{list-style:none;width:26px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:var(--r-full);color:var(--faint);cursor:pointer;font-size:15px;line-height:1}
+  .react-picker>summary::-webkit-details-marker{display:none}
+  .react-picker>summary:hover,.react-picker[open]>summary{background:var(--hover);color:var(--ink)}
+  .react-menu{position:absolute;left:0;bottom:26px;display:flex;gap:2px;padding:5px;background:var(--bg);border:1px solid var(--line-2);border-radius:var(--r-full);box-shadow:0 8px 24px rgb(0 0 0 / 20%);white-space:nowrap}
+  .react-menu button{border:0;background:transparent;width:32px;height:32px;border-radius:var(--r-full);font-size:18px;cursor:pointer;padding:0}
+  .react-menu button:hover{background:var(--hover);transform:scale(1.08)}
   .chatempty{margin:auto;color:var(--faint);font-size:14px;text-align:center;max-width:300px;line-height:1.6}
   .chatfoot{flex:none;border-top:1px solid var(--line);background:var(--bg)}
   .chatfoot .assistant{border:0;border-radius:0;background:transparent}
@@ -533,6 +575,13 @@
   .chatfoot .inbar input{border-radius:24px}
 
   body.compact .chatbody{padding:var(--space-3x)}
+  body.focus-mode #sidebartoggle{display:none}
+  body.focus-mode .chatbody{padding:var(--space-5x) clamp(var(--space-5x),8vw,120px)}
+  body.focus-mode .chat-brief{max-width:920px;width:100%;align-self:center;border-color:color-mix(in oklch,var(--primary) 40%,var(--line));padding:var(--space-5x)}
+  body.focus-mode .composer{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;padding:var(--space-4x) clamp(var(--space-5x),8vw,120px)}
+  body.focus-mode .composer-label{display:flex;grid-column:1/-1;align-items:baseline;justify-content:space-between;gap:var(--space-3x);font-size:12px;font-weight:800;color:var(--ink)}
+  body.focus-mode .composer-label span{font-size:11px;font-weight:500;color:var(--faint)}
+  body.focus-mode .composer textarea{border-radius:var(--r-md);min-height:88px;max-height:180px}
   @media (max-width:1100px){.app-shell{grid-template-columns:minmax(260px,28%) minmax(0,1fr)}}
   @media (max-width:820px){
     .app-shell{grid-template-columns:minmax(0,1fr);grid-template-rows:56px minmax(0,1fr)}
@@ -556,6 +605,12 @@
     .composer textarea{width:100%;max-height:110px}
     .composer .cbtns{display:grid;grid-template-columns:1fr 1fr;width:100%;padding:0}
     .composer .cbtns button{min-height:44px}
+    body.focus-mode .sidebar{display:none}
+    body.focus-mode .chatpane{display:flex}
+    body.focus-mode .focusbar{padding:9px var(--space-3x)}
+    body.focus-mode .chatbody{padding:var(--space-3x)}
+    body.focus-mode .composer{padding:10px var(--space-3x)}
+    .chat-brief .brief-grid{grid-template-columns:1fr}
   }
   @media (max-width:700px){.voicebar{align-items:flex-start;flex-direction:column}.voicectls{width:100%;flex-wrap:wrap}}
   @media (max-width:480px){.topbar{padding:0 var(--space-3x)}.brand{font-size:14px}.brand-side{gap:var(--space-2x)}.topbar .act{padding-inline:10px}}
@@ -577,6 +632,7 @@
       <button class="act" onclick="openSettings()" title="Settings">Settings</button>
       <button class="act" id="loadall" onclick="loadEverything()" hidden>Reload everything</button>
       <button class="act" id="syncunread" onclick="syncWhatsAppUnread()" title="Refresh unread chats directly from WhatsApp">Sync unread</button>
+      <button class="act" id="focusbtn" onclick="toggleFocusMode()" title="Work one priority chat at a time" hidden>Focus</button>
       <button class="btn" id="run" onclick="runTriage()" title="Rank open WhatsApp loops by importance and urgency">Triage inbox</button>
     </div>
   </header>
@@ -602,6 +658,17 @@
   </aside>
 
   <section class="chatpane">
+    <div class="focusbar" id="focusbar">
+      <div class="focuscopy">
+        <div class="focuscount" id="focuscount">Priority 1 of 1</div>
+        <div class="focusstatus" id="focusstatus">One conversation at a time.</div>
+      </div>
+      <div class="focusactions">
+        <button class="act" id="focusprev" onclick="focusStep(-1)">Previous</button>
+        <button class="act" id="focusnext" onclick="focusStep(1)">Next</button>
+        <button class="act" onclick="exitFocusMode()">Show inbox</button>
+      </div>
+    </div>
     <div class="voicebar" id="voicebar">
       <div class="voicecopy">
         <div class="voicecount" id="voicecount">Voice review</div>
@@ -649,6 +716,7 @@
     </div>
     <!-- Draft workspace. Only the final review modal can send. -->
     <div class="composer">
+      <label class="composer-label" for="composer">Suggested reply <span>Based on how you write in this conversation. Edit anything.</span></label>
       <textarea id="composer" rows="1" placeholder="Edit the draft"
                 oninput="growComposer(this)" onkeydown="composerKeydown(event)"></textarea>
       <div class="cbtns">
@@ -698,6 +766,24 @@
   </div>
 </div>
 
+<!-- Emoji reactions are also external communication, so Adam confirms the exact message and emoji. -->
+<div class="modal" id="reactionmodal" onclick="if(event.target===this)closeReactionReview()">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="reactiontitle" style="max-width:440px;height:auto;max-height:86vh">
+    <div class="mhead"><span class="mwho" id="reactiontitle">Confirm reaction</span>
+      <button class="x" onclick="closeReactionReview()" title="close">&times;</button></div>
+    <div class="reply-review">
+      <div class="target" id="reactiontarget"></div>
+      <div id="reactionemoji" style="font-size:44px;text-align:center;padding:18px 0"></div>
+      <div class="hint2">Your click below adds this reaction through your linked WhatsApp account.</div>
+      <div class="status" id="reactionstatus" aria-live="polite"></div>
+      <div class="actions">
+        <button class="act" onclick="closeReactionReview()">Cancel</button>
+        <button class="btn" id="reactionconfirm" onclick="confirmReaction(event)">Add reaction</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- settings -->
 <div class="modal" id="setmodal" onclick="if(event.target===this)closeSettings()">
   <div class="sheet" style="max-width:520px;height:auto;max-height:86vh">
@@ -705,7 +791,7 @@
       <button class="x" onclick="closeSettings()" title="close">&times;</button></div>
     <div style="padding:var(--space-4x) var(--space-5x);overflow:auto">
       <div class="setrow">
-        <div><div class="lbl2">Human-confirmed sending</div><div class="hint2">Only your click on the final review modal can send. Triage, AI drafting, and background actions cannot send messages.</div></div>
+        <div><div class="lbl2">Human-confirmed communication</div><div class="hint2">Only your click on a final review modal can send a reply or add a reaction. Triage, AI drafting, and background actions cannot communicate.</div></div>
         <div class="ctl"><span class="demoflag" style="color:var(--ok);border-color:rgb(from var(--ok) r g b / 30%);background:rgb(from var(--ok) r g b / 10%)">Confirmed</span></div>
       </div>
       <div class="setrow">
@@ -984,6 +1070,12 @@
       LATEST_TRIAGE_META = meta;
       $('#cntPriority').textContent = meta.actionCount;
       renderFates(remaining, meta);
+      if(FOCUS_MODE){
+        FOCUS_INDEX = Math.min(FOCUS_INDEX, Math.max(0, focusQueue().length - 1));
+        updateFocusBar();
+        const next = focusQueue()[FOCUS_INDEX];
+        if(next) await openPriority(next.chatId);
+      }
       if(voiceActive) await showVoiceCurrent(false);
     }catch(error){
       if(btn){ btn.disabled = false; btn.textContent = old; }
@@ -1029,7 +1121,12 @@
       filterRolodex($('#rolodex').value);
 
       if(openId === chatId){
-        if(TAB === 'unread' && unread.length){
+        if(FOCUS_MODE){
+          FOCUS_INDEX = Math.min(FOCUS_INDEX, Math.max(0, focusQueue().length - 1));
+          updateFocusBar();
+          const next = focusQueue()[FOCUS_INDEX];
+          if(next) await openPriority(next.chatId);
+        }else if(TAB === 'unread' && unread.length){
           await openChat(unread[0].id);
         }else if(TAB === 'unread'){
           openId = null;
@@ -1077,12 +1174,19 @@
     return !!foldState[key];
   }
   async function openPriority(chatId){
-    const it = window.__items[chatId]; if(!it) return;
+    const it = window.__items[chatId] || LATEST_TRIAGE_ITEMS.find((item) => item.chatId === chatId);
+    if(!it) return;
+    window.__items[chatId] = it;
     openDetailId = chatId;
+    if(FOCUS_MODE){
+      const index = focusQueue().findIndex((item) => item.chatId === chatId);
+      if(index >= 0) FOCUS_INDEX = index;
+    }
     if(ALL.some(x => x.id === chatId)) await openChat(chatId);
     else setCtx({id:chatId,who:it.who,network:it.network});
     setComposer(noEm(it.draft || ''));
     renderFates(Object.values(window.__items), window.__eightyTwenty);
+    updateFocusBar();
   }
   function jumpTo(chatId){
     openPriority(chatId);
@@ -1096,6 +1200,78 @@
     return items
       .filter(i => i.fate === 'F2_BLOCK' || i.fate === 'F1_QUICK')
       .sort((a,b) => (b.score||0) - (a.score||0) || (b.daysWaiting||0) - (a.daysWaiting||0));
+  }
+
+  function taskListFor(item){
+    const source = Array.isArray(item?.tasks) ? item.tasks : [];
+    return [...new Set([...source, item?.task || '']
+      .map((value) => noEm(value).trim()).filter(Boolean))];
+  }
+
+  function focusQueue(){
+    return actionQueue(LATEST_TRIAGE_ITEMS);
+  }
+
+  function updateFocusBar(){
+    const queue = focusQueue();
+    const button = $('#focusbtn');
+    button.hidden = !queue.length;
+    button.textContent = FOCUS_MODE ? 'Show inbox' : 'Focus';
+    $('#focusbar').classList.toggle('on', FOCUS_MODE && queue.length > 0);
+    if(!queue.length){
+      FOCUS_INDEX = 0;
+      if(FOCUS_MODE){
+        $('#chathead').style.display = 'none';
+        $('#chatbody').innerHTML = '<div class="chatempty">Priority queue cleared. Nothing actionable is waiting on you.</div>';
+        setComposer('');
+      }
+      return;
+    }
+    FOCUS_INDEX = Math.max(0, Math.min(FOCUS_INDEX, queue.length - 1));
+    const item = queue[FOCUS_INDEX];
+    const tasks = taskListFor(item);
+    $('#focuscount').textContent = 'Priority ' + (FOCUS_INDEX + 1) + ' of ' + queue.length;
+    $('#focusstatus').textContent = tasks.length
+      ? tasks.length + ' task' + (tasks.length === 1 ? '' : 's') + ' before reply, ' + queue.length + ' chats left'
+      : 'Draft ready, ' + queue.length + ' chats left';
+    $('#focusprev').disabled = FOCUS_INDEX === 0;
+    $('#focusnext').disabled = FOCUS_INDEX >= queue.length - 1;
+  }
+
+  async function enterFocusMode(chatId){
+    const queue = focusQueue();
+    if(!queue.length) return;
+    FOCUS_MODE = true;
+    localStorage.setItem('cc-focus-mode', '1');
+    document.body.classList.add('focus-mode', 'conversation-open');
+    const wanted = chatId || openId;
+    const index = queue.findIndex((item) => item.chatId === wanted);
+    FOCUS_INDEX = index >= 0 ? index : 0;
+    updateFocusBar();
+    await openPriority(queue[FOCUS_INDEX].chatId);
+  }
+
+  function exitFocusMode(){
+    FOCUS_MODE = false;
+    localStorage.setItem('cc-focus-mode', '0');
+    document.body.classList.remove('focus-mode', 'conversation-open');
+    $('#focusbar').classList.remove('on');
+    updateFocusBar();
+    setTab('priorities');
+  }
+
+  function toggleFocusMode(){
+    if(FOCUS_MODE) exitFocusMode();
+    else enterFocusMode();
+  }
+
+  async function focusStep(delta){
+    const queue = focusQueue();
+    if(!queue.length) return;
+    const next = Math.max(0, Math.min(queue.length - 1, FOCUS_INDEX + delta));
+    if(next === FOCUS_INDEX) return;
+    FOCUS_INDEX = next;
+    await openPriority(queue[FOCUS_INDEX].chatId);
   }
 
   function render8020(action, et){
@@ -1316,6 +1492,62 @@
       $('#handoffsend').textContent = 'Try sending again';
       $('#handoffstatus').classList.add('error');
       $('#handoffstatus').textContent = String(error.message || error);
+    }
+  }
+
+  let pendingReaction = null;
+  let reactionSending = false;
+
+  function reviewReaction(event, chatId, messageId, emoji){
+    event.stopPropagation();
+    event.currentTarget?.closest('details')?.removeAttribute('open');
+    const source = ALL.find((item) => item.id === chatId);
+    const requestId = crypto.randomUUID
+      ? crypto.randomUUID()
+      : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+    pendingReaction = { chatId, messageId, emoji, requestId };
+    reactionSending = false;
+    $('#reactiontarget').textContent = 'React to a message in ' + (source?.who || 'this conversation');
+    $('#reactionemoji').textContent = emoji;
+    $('#reactionstatus').textContent = '';
+    $('#reactionstatus').classList.remove('error');
+    $('#reactionconfirm').disabled = false;
+    $('#reactionconfirm').textContent = 'Add reaction';
+    $('#reactionmodal').classList.add('on');
+  }
+
+  function closeReactionReview(){
+    if(reactionSending) return;
+    $('#reactionmodal').classList.remove('on');
+    pendingReaction = null;
+  }
+
+  async function confirmReaction(event){
+    if(!event?.isTrusted || !pendingReaction || reactionSending) return;
+    reactionSending = true;
+    $('#reactionconfirm').disabled = true;
+    $('#reactionconfirm').textContent = 'Adding reaction';
+    $('#reactionstatus').classList.remove('error');
+    $('#reactionstatus').textContent = 'Adding through your linked WhatsApp account.';
+    const reaction = pendingReaction;
+    try{
+      const response = await fetch('/api/wa/react', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({...reaction, confirmed:true})
+      });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'WhatsApp could not add this reaction.');
+      reactionSending = false;
+      pendingReaction = null;
+      $('#reactionmodal').classList.remove('on');
+      if(openId === reaction.chatId) setTimeout(() => openChat(reaction.chatId), 250);
+    }catch(error){
+      reactionSending = false;
+      $('#reactionconfirm').disabled = false;
+      $('#reactionconfirm').textContent = 'Try again';
+      $('#reactionstatus').classList.add('error');
+      $('#reactionstatus').textContent = String(error.message || error);
     }
   }
 
@@ -1775,6 +2007,8 @@
   let openId = null;
   let LATEST_TRIAGE_ITEMS = [];
   let LATEST_TRIAGE_META = null;
+  let FOCUS_MODE = false;
+  let FOCUS_INDEX = 0;
   let LAST_COUNTS = null;
 
   function renderSideStats(c, g){
@@ -1916,8 +2150,11 @@
     $('#chatbody').innerHTML = '<div class="chatempty">Loading conversation…</div>';
     // Point the draft assistant at whoever is open, so "draft a reply" means this one.
     setCtx({ id: it.id, who: it.who, network: it.network });
+    const triaged = LATEST_TRIAGE_ITEMS.find((item) => item.chatId === id);
+    setComposer(noEm(triaged?.draft || ''));
     try{
       const d = await (await fetch('/api/messages?id='+encodeURIComponent(id)+'&limit=80')).json();
+      if(openId !== id) return;
       if(d.error) throw new Error(d.error);
       const msgs = d.messages || [];
       const voiceNotes = d.voiceNotes || {};
@@ -1935,11 +2172,90 @@
           + esc(d.note || 'No messages loaded for this conversation.') + '</div>';
         return;
       }
-      $('#chatbody').innerHTML = msgs.map(messageBubble).join('');
-      const body = $('#chatbody'); body.scrollTop = body.scrollHeight;
+      const unreadCount = Math.max(0, Number(d.unreadCount ?? it.unread) || 0);
+      $('#chatbody').innerHTML = conversationView(it, msgs, unreadCount, triaged);
+      const body = $('#chatbody');
+      body.scrollTop = unreadCount > 0 ? 0 : body.scrollHeight;
     }catch(e){
+      if(openId !== id) return;
       $('#chatbody').innerHTML = '<div class="chatempty">Could not load: '+esc(String(e.message||e))+'</div>';
     }
+  }
+
+  function unreadStartIndex(messages, unreadCount){
+    let remaining = Math.max(0, Number(unreadCount) || 0);
+    if(!remaining) return messages.length;
+    for(let index = messages.length - 1; index >= 0; index--){
+      if(!messages[index].isSender) remaining--;
+      if(remaining <= 0) return index;
+    }
+    return 0;
+  }
+
+  function chatBriefing(it, triaged){
+    if(!triaged){
+      if(!(Number(it.unread) > 0)) return '';
+      return '<section class="chat-brief">'
+        + '<div class="brief-kicker">AI briefing</div>'
+        + '<div class="brief-summary">This unread chat has not been triaged yet.</div>'
+        + '<div class="brief-action">Rank the unread inbox to get the context, next action, and an editable Adam-style draft.</div>'
+        + '<div class="brief-actions"><button class="act primary" onclick="runTriage()">Triage unread inbox</button></div>'
+        + '</section>';
+    }
+    const clarification = noEm(triaged.clarifyingQuestion || '');
+    const next = noEm(triaged.nextAction || triaged.nextStep || '');
+    const tasks = taskListFor(triaged);
+    const taskHtml = tasks.length
+      ? '<ol class="brief-task-list">'+tasks.map((task) => '<li class="brief-task">'+esc(task)+'</li>').join('')+'</ol>'
+      : '<div class="brief-ready">No task required. You can reply now.</div>';
+    const draftState = clarification
+      ? '<div class="brief-action">Answer the question below before AI writes a reply.</div>'
+      : triaged.draft
+        ? '<div class="brief-ready">An editable draft is ready below.</div>'
+        : '<div class="brief-action">No draft yet. Ask AI to write one from this conversation.</div>';
+    return '<section class="chat-brief">'
+      + '<div class="brief-kicker">AI briefing · priority '+esc(String(triaged.score || ''))+'</div>'
+      + '<div class="brief-summary">'+esc(noEm(triaged.summary || triaged.reason || 'Review the unread messages below.'))+'</div>'
+      + '<div class="brief-grid">'
+      +   '<div class="brief-block"><div class="brief-label">Tasks before reply</div>'+taskHtml+'</div>'
+      +   '<div class="brief-block"><div class="brief-label">Draft status</div>'+draftState+'</div>'
+      + '</div>'
+      + (next ? '<div class="brief-action"><b>Next action:</b> '+esc(next)+'</div>' : '')
+      + (clarification ? '<div class="clarify"><b>Answer before drafting</b>'+esc(clarification)+'</div>' : '')
+      + '<div class="brief-actions">'
+      +   (triaged.draft ? '<button class="act primary" onclick="useBriefDraft('+jsq(triaged.chatId)+')">Use suggested draft</button>' : '')
+      +   '<button class="act" onclick="draftForOpen()">'+(clarification ? 'Answer with AI' : 'Refine with AI')+'</button>'
+      + '</div></section>';
+  }
+
+  function conversationView(it, messages, unreadCount, triaged){
+    const brief = chatBriefing(it, triaged);
+    if(!unreadCount) return brief + messages.map(messageBubble).join('');
+    const start = unreadStartIndex(messages, unreadCount);
+    const earlier = messages.slice(0, start);
+    const unread = messages.slice(start);
+    return brief
+      + (earlier.length
+        ? '<button class="earlier-toggle" onclick="toggleEarlierMessages(this)">Show '+earlier.length+' earlier messages</button>'
+          + '<div class="earlier-messages" hidden>'+earlier.map(messageBubble).join('')+'</div>'
+        : '')
+      + '<div class="unread-divider" id="unreadboundary">'+unreadCount+' unread message'+(unreadCount === 1 ? '' : 's')+'</div>'
+      + unread.map(messageBubble).join('');
+  }
+
+  function toggleEarlierMessages(button){
+    const earlier = button.nextElementSibling;
+    if(!earlier) return;
+    const show = earlier.hidden;
+    earlier.hidden = !show;
+    button.textContent = show ? 'Hide earlier messages' : 'Show earlier messages';
+  }
+
+  function useBriefDraft(chatId){
+    const item = LATEST_TRIAGE_ITEMS.find((entry) => entry.chatId === chatId);
+    if(!item?.draft) return;
+    setComposer(noEm(item.draft));
+    $('#composer').focus();
   }
 
   function messageBubble(m){
@@ -1958,6 +2274,15 @@
       : '';
     const timestamp = messageTime(m.timestamp);
     const metadata = [m.isSender ? 'you' : (m.senderName || ''), timestamp].filter(Boolean).join(' · ');
+    const reactions = Array.isArray(m.reactions) && m.reactions.length
+      ? '<div class="message-reactions">'+m.reactions.map((reaction) =>
+          '<span class="message-reaction'+(reaction.fromMe?' mine':'')+'">'+esc(reaction.emoji || '')+'</span>').join('')+'</div>'
+      : '';
+    const reactionPicker = !m.isSender && m.key && /^wa:/.test(openId || '')
+      ? '<details class="react-picker"><summary title="React to this message" aria-label="React to this message">&#9786;</summary>'
+        + '<div class="react-menu">'+['👍','❤️','😂','😮','😢','🙏'].map((emoji) =>
+          '<button title="React '+emoji+'" onclick="reviewReaction(event,'+jsq(openId)+','+jsq(m.key)+','+jsq(emoji)+')">'+emoji+'</button>').join('')+'</div></details>'
+      : '';
     const retry = voice && voiceStatus === 'failed' && m.key
       ? '<div class="voice-actions">'
         +'<button class="voice-retry" onclick="retryVoiceTranscript(event,'+jsq(openId)+','+jsq(m.key)+',this)">Retry from WhatsApp</button>'
@@ -1965,10 +2290,13 @@
         +'<input hidden type="file" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav" onchange="uploadVoiceTranscript(event,'+jsq(openId)+','+jsq(m.key)+',this)">'
         +'</div>'
       : '';
-    return '<div class="bubble '+(m.isSender?'me':'them')+(voice?' voice-note':'')+'">'
-      + voiceLabel + '<div class="'+(voice?'voice-note-text':'')+'">'+esc(text)+'</div>'
-      + retry
-      + '<div class="bmeta" title="'+attr(messageDateTitle(m.timestamp))+'">'+esc(metadata)+'</div>'
+    return '<div class="bubble-wrap '+(m.isSender?'me':'them')+'">'
+      + '<div class="bubble '+(m.isSender?'me':'them')+(voice?' voice-note':'')+'">'
+      +   voiceLabel + '<div class="'+(voice?'voice-note-text':'')+'">'+esc(text)+'</div>'
+      +   retry
+      +   '<div class="bmeta" title="'+attr(messageDateTitle(m.timestamp))+'">'+esc(metadata)+'</div>'
+      + '</div>'
+      + reactions + reactionPicker
       + '</div>';
   }
 
@@ -2251,6 +2579,7 @@
       if(data.error || data.empty || !(data.items||[]).length) return;
       LATEST_TRIAGE_ITEMS = (data.items || []).map(it => ({
         ...it,
+        tasks: Array.isArray(it.tasks) ? it.tasks.map(noEm) : [],
         draft: noEm(it.draft),
         summary: noEm(it.summary),
         reason: noEm(it.reason),
@@ -2260,7 +2589,8 @@
       const action = actionQueue(LATEST_TRIAGE_ITEMS);
       $('#cntPriority').textContent = action.length;
       setVoiceQueue(action);
-      if(openWhenReady && action.length) setTab('priorities');
+      updateFocusBar();
+      if(action.length && (openWhenReady || localStorage.getItem('cc-focus-mode') === '1')) await enterFocusMode(action[0].chatId);
       else if(TAB === 'priorities') renderFates(LATEST_TRIAGE_ITEMS, LATEST_TRIAGE_META);
     }catch{}
   }
@@ -2402,14 +2732,15 @@
   async function runTriage(){
     const b = $('#run'); b.disabled = true; b.textContent = 'Triaging…';
     $('#err').innerHTML = '';
-    $('#list').innerHTML = '<div class="state">Checking every active WhatsApp conversation, then ranking the open loops.</div>';
+    $('#list').innerHTML = '<div class="state">Reading every unread WhatsApp chat, building context, then ranking the next actions.</div>';
     startProg();
     try{
-      // Unread flags from companion sync are incomplete, so triage every
-      // active WhatsApp conversation that looks like it is in Adam's court.
+      // The unread sync is the source of truth for this speedrun. Triage reads
+      // each unread conversation, then separates replies, task-first loops,
+      // waiting, and chats that need no response.
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 10 * 60 * 1000);
-      const data = await (await fetch('/api/inbox?scope=whatsapp-open', { signal: ctrl.signal })).json();
+      const data = await (await fetch('/api/inbox?scope=whatsapp-unread', { signal: ctrl.signal })).json();
       clearTimeout(to);
       if(data.error) throw new Error(data.error);
       const llm = data.llm || (data.demo ? 'demo' : '');
@@ -2422,7 +2753,13 @@
           : grokMode
             ? '<span class="demoflag">grok_local</span>'
             : '<span class="demoflag">'+esc(llm)+'</span>';
-      const items = (data.items || []).map(it => ({...it, draft: noEm(it.draft), summary: noEm(it.summary), reason: noEm(it.reason)}));
+      const items = (data.items || []).map(it => ({
+        ...it,
+        tasks: Array.isArray(it.tasks) ? it.tasks.map(noEm) : [],
+        draft: noEm(it.draft),
+        summary: noEm(it.summary),
+        reason: noEm(it.reason)
+      }));
       const visibleItems = items.filter(it => !isVoiceHandled(it));
       const action = actionQueue(visibleItems);
       LATEST_TRIAGE_ITEMS = visibleItems;
@@ -2452,6 +2789,8 @@
       renderFates(visibleItems, et);
       setTab('priorities');
       setVoiceQueue(action);
+      updateFocusBar();
+      if(action[0]) setTimeout(() => enterFocusMode(action[0].chatId), 0);
       if(voiceAutoStart){
         voiceAutoStart = false;
         setTimeout(startVoiceReview, 50);

@@ -67,6 +67,31 @@ deduplicates repeated request IDs. Pressing Enter in the composer opens this
 review modal; Shift+Enter inserts a line break. Non-WhatsApp drafts remain
 copy-only.
 
+Received WhatsApp messages expose a compact emoji picker. Selecting an emoji
+opens a separate review modal that names the conversation and shows the exact
+reaction. Only Adam's direct click on `Add reaction` may invoke `/api/wa/react`.
+Agents, triage, drafting, background jobs, and automated tests never invoke that
+endpoint or its confirmation control.
+
+When a conversation has unread messages, the chat pane collapses older read
+history behind `Show earlier messages`, places an unread divider at WhatsApp's
+count-derived boundary, and starts at the first unread message instead of the
+bottom. After `Triage inbox`, the same pane shows the AI context summary, next
+action, every task-first prerequisite or clarifying question, and loads the
+editable unsent draft into the composer. Triage covers the current unread
+WhatsApp queue and reads up to 30 recent messages per chat; interactive drafting
+reads up to 40. Drafting studies Adam's sent messages in that conversation and
+matches the relationship-specific casing, length, directness, warmth, and
+vocabulary.
+
+After triage, the app enters Focus mode by default. Focus mode hides the inbox
+and presents one ranked actionable conversation at a time with a `Priority X of
+Y` counter, ordered prerequisite tasks, context summary, and editable suggested
+reply. Previous and Next move within the ranked queue without changing WhatsApp.
+`Cleared` stores only the private conversation version and advances to the next
+priority. `Show inbox` returns to the complete ranked list. The preference is
+restored with the latest saved triage after reload.
+
 WhatsApp protocol, key-distribution, history-sync, and app-state events are
 control traffic. `web/whatsapp.mjs` drops them at ingestion and removes old
 placeholders while loading the local store. Never expose them as chat messages
@@ -137,7 +162,8 @@ otherwise communicate externally as Adam. This remains true even when Adam says
 revise, and present copy-ready text. Adam performs the final communication
 action manually. In cleared.chat, Adam's own authenticated click on the final
 review modal is that manual action. Agents, triage, drafting, background jobs,
-and automated tests must never invoke `/api/wa/send` or the modal's Send control.
+and automated tests must never invoke `/api/wa/send`, `/api/wa/react`, or either
+modal's final confirmation control.
 
 ## How it works
 
@@ -148,6 +174,7 @@ and automated tests must never invoke `/api/wa/send` or the modal's Send control
 4. Unclear intent or facts produce one clarifying question before any draft.
 5. Drafts are editable, contain no em dashes or emojis, and a synced WhatsApp
    reply sends only after Adam presses the one final confirmation control.
+6. Message reactions use common emojis and require their own final confirmation.
 
 ## Private state
 

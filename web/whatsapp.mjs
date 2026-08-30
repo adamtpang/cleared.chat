@@ -278,6 +278,7 @@ const messagesById = new Map(); // id -> [{ isSender, senderName, text, timestam
 const lidToPhone = new Map();
 const contactAliases = new Map();
 const recentSendRequests = new Map();
+const recentReactionRequests = new Map();
 let contactAliasesLoaded = false;
 
 export function canonicalWhatsAppJid(raw) {
@@ -915,6 +916,23 @@ function ingestProtoMessages(msgs) {
   for (const m of msgs || []) {
     const jid = canonicalWhatsAppJid(m.key?.remoteJid || m.key?.remoteJidAlt || '');
     if (!jid || jid === 'status@broadcast') continue;
+    const reaction = contentOf(m).reactionMessage;
+    if (reaction?.key?.id) {
+      const targetJid = canonicalWhatsAppJid(reaction.key.remoteJid || jid);
+      const target = (messagesById.get(targetJid) || []).find((message) => message.key === reaction.key.id);
+      if (target) {
+        const actor = m.key?.fromMe
+          ? 'me'
+          : String(m.key?.participant || m.key?.remoteJid || m.pushName || 'them');
+        const reactions = Array.isArray(target.reactions)
+          ? target.reactions.filter((item) => item.actor !== actor)
+          : [];
+        const emoji = String(reaction.text || '').trim();
+        if (emoji) reactions.push({ emoji, actor, fromMe: Boolean(m.key?.fromMe) });
+        target.reactions = reactions;
+      }
+      continue;
+    }
     const text = messageTextForDisplay(m);
     const voice = voiceInfo(m);
     if (!text && !voice) continue;
@@ -1044,6 +1062,27 @@ export function validateOutboundText({ chatId, text, requestId } = {}) {
   return { jid, text: clean, requestId: id };
 }
 
+function validReactionEmoji(value) {
+  const emoji = String(value || '').trim();
+  const graphemes = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(emoji)];
+  if (graphemes.length !== 1 || !/\p{Extended_Pictographic}/u.test(emoji)) {
+    throw new Error('Choose one emoji reaction.');
+  }
+  return emoji;
+}
+
+export function validateOutboundReaction({ chatId, messageId, emoji, requestId } = {}) {
+  const jid = canonicalWhatsAppJid(whatsappJid(chatId));
+  if (!jid || !/@(?:s\.whatsapp\.net|g\.us|lid)$/.test(jid) || jid === 'status@broadcast') {
+    throw new Error('Choose a synced WhatsApp conversation before reacting.');
+  }
+  const targetId = String(messageId || '').trim();
+  if (!/^[a-z0-9_-]{6,200}$/i.test(targetId)) throw new Error('Choose a valid WhatsApp message.');
+  const id = String(requestId || '').trim();
+  if (!/^[a-z0-9-]{16,80}$/i.test(id)) throw new Error('A valid confirmation request is required.');
+  return { jid, messageId: targetId, emoji: validReactionEmoji(emoji), requestId: id };
+}
+
 export async function sendWhatsAppText(input = {}) {
   if (!chatsById.size) loadStore();
   const outbound = validateOutboundText(input);
@@ -1075,6 +1114,55 @@ export async function sendWhatsAppText(input = {}) {
     return result;
   } catch (error) {
     recentSendRequests.delete(outbound.requestId);
+    throw error;
+  }
+}
+
+export async function sendWhatsAppReaction(input = {}) {
+  if (!chatsById.size) loadStore();
+  const outbound = validateOutboundReaction(input);
+  const target = (messagesById.get(outbound.jid) || [])
+    .find((message) => message.key === outbound.messageId);
+  if (!target) throw new Error('This message is not in your synced WhatsApp history.');
+
+  const duplicate = recentReactionRequests.get(outbound.requestId);
+  if (duplicate) return duplicate;
+
+  const operation = (async () => {
+    await ensureWhatsAppStarted();
+    const activeSocket = await waitForOpenSocket();
+    const key = {
+      remoteJid: outbound.jid,
+      id: target.key,
+      fromMe: Boolean(target.isSender),
+      ...(target.participant ? { participant: target.participant } : {}),
+    };
+    const response = await activeSocket.sendMessage(outbound.jid, {
+      react: { text: outbound.emoji, key },
+    });
+    const reactions = Array.isArray(target.reactions)
+      ? target.reactions.filter((item) => item.actor !== 'me')
+      : [];
+    reactions.push({ emoji: outbound.emoji, actor: 'me', fromMe: true });
+    target.reactions = reactions;
+    scheduleSave();
+    return {
+      ok: true,
+      chatId: toWhatsAppSourceId(outbound.jid),
+      messageId: target.key,
+      reaction: outbound.emoji,
+      reactionMessageId: response?.key?.id || outbound.requestId,
+      sentAt: new Date().toISOString(),
+    };
+  })();
+
+  recentReactionRequests.set(outbound.requestId, operation);
+  try {
+    const result = await operation;
+    setTimeout(() => recentReactionRequests.delete(outbound.requestId), 10 * 60 * 1000).unref?.();
+    return result;
+  } catch (error) {
+    recentReactionRequests.delete(outbound.requestId);
     throw error;
   }
 }

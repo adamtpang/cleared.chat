@@ -11,6 +11,7 @@ import {
   normalizeContactPatch,
   registerLidMappings,
   toWhatsAppSourceId,
+  validateOutboundReaction,
   validateOutboundText,
   validateVoiceRetryRequest,
   validateVoiceUpload,
@@ -50,6 +51,28 @@ test('outbound text rejects non-WhatsApp targets and missing confirmation IDs', 
   assert.throws(() => validateOutboundText({
     chatId: 'wa:60123456789@s.whatsapp.net',
     text: 'hello',
+  }), /confirmation request/);
+});
+
+test('outbound reactions require one emoji and a confirmed synced message', () => {
+  const outbound = validateOutboundReaction({
+    chatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    emoji: '👍🏽',
+    requestId: '12345678-1234-4234-9234-123456789abc',
+  });
+  assert.equal(outbound.jid, '60123456789@s.whatsapp.net');
+  assert.equal(outbound.emoji, '👍🏽');
+  assert.throws(() => validateOutboundReaction({
+    chatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    emoji: 'looks good',
+    requestId: '12345678-1234-4234-9234-123456789abc',
+  }), /one emoji/);
+  assert.throws(() => validateOutboundReaction({
+    chatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    emoji: '👍',
   }), /confirmation request/);
 });
 

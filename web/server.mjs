@@ -33,6 +33,7 @@ import {
   resyncUnreadState as resyncWhatsAppUnreadState,
   setContactAlias as setWhatsAppContactAlias,
   sendWhatsAppText,
+  sendWhatsAppReaction,
   retryVoiceTranscription as retryWhatsAppVoiceTranscription,
   transcribeUploadedVoice as transcribeUploadedWhatsAppVoice,
   getVoiceTranscriptionStatus as getWhatsAppVoiceTranscriptionStatus,
@@ -90,6 +91,7 @@ score = importance * urgency (1-25). classify each as REPLY (say something), TAS
 const SAMPLE = [
   { chatId: 'demo-client', who: 'Client', network: 'WhatsApp', importance: 5, urgency: 5, score: 25, type: 'REPLY+TASK', fate: FATE.BLOCK, replyOwed: true, taskFirst: true,
     summary: 'Needs the final contract review before today\'s deadline.',
+    tasks: ['Review the two open clauses.', 'Confirm the final wording.'],
     task: 'Review the two open clauses.', nextStep: 'Review the clauses, then confirm.', nextAction: 'Review the two open clauses.',
     draft: 'reviewing the two open clauses now. i will confirm once that is done' },
   { chatId: 'demo-cofounder', who: 'Co-founder', network: 'WhatsApp', importance: 5, urgency: 4, score: 20, type: 'REPLY', fate: FATE.QUICK, replyOwed: true, taskFirst: false,
@@ -260,7 +262,7 @@ function avatarUrlFor(conversation) {
   return null;
 }
 
-async function transcriptFor(chatId, limit = 12) {
+async function transcriptFor(chatId, limit = 40) {
   if (isWhatsAppChatId(chatId)) {
     return getWhatsAppMessages(chatId, limit)
       .map((x) => `${x.isSender ? 'Me' : (x.senderName || 'Them')}: ${x.text || '[media]'}`)
@@ -547,11 +549,12 @@ function localHeuristicRank(chats, now = new Date()) {
 function forModel(convs) {
   return convs.map((c) => ({
     chatId: c.id, who: c.title, network: c.network, type: c.type, muted: c.isMuted,
-    messages: (c.messages || []).slice(-12).map((m) => ({
+    unreadCount: Math.max(0, Number(c.unreadCount || c.unread) || 0),
+    messages: (c.messages || []).slice(-30).map((m) => ({
       from: m.isSender ? 'me' : (m.senderName || 'them'),
       at: m.timestamp,
       kind: m.kind || 'text',
-      text: redact(m.text).slice(0, m.kind === 'voice' ? 1200 : 500),
+      text: redact(m.text).slice(0, m.kind === 'voice' ? 1800 : 700),
     })),
   }));
 }
@@ -562,6 +565,7 @@ function rankPrompt(chats) {
 ${VOICE}
 
 You are triaging a messaging inbox, led by WhatsApp. Judge each CONVERSATION on its whole state, never on the last message alone.
+Messages marked "me" are examples of Adam's real writing to this person. When drafting, study those examples and match his relationship-specific casing, length, directness, warmth, and vocabulary. Prefer the real examples over a generic assistant voice.
 
 Assign every conversation exactly ONE fate:
 - F1_QUICK: I can answer in under 2 minutes. Draft the reply in my register for that person.
@@ -589,7 +593,8 @@ fate (F1_QUICK | F2_BLOCK | F3_WAITING | F4_LET_GO | UNCLEAR),
 reason (ONE line saying why this fate),
 summary (one line), nextStep (concrete next action),
 minutes (integer estimate, only for F2_BLOCK, else 0),
-task (one concrete task that must happen before the complete reply for F2_BLOCK, else ""),
+tasks (an ordered JSON array of every concrete prerequisite before the complete reply for F2_BLOCK, else []),
+task (a short summary of the first prerequisite for F2_BLOCK, else ""),
 deliverable (one line, only for F2_BLOCK, else ""),
 needsClarification (boolean),
 clarifyingQuestion (one specific question for Adam when needsClarification is true, else ""),
@@ -702,6 +707,7 @@ async function repairMissingDrafts(items, conversations) {
       chatId: it.chatId,
       who: it.who,
       taskFirst: it.taskFirst,
+      tasks: it.tasks,
       task: it.task,
       summary: it.summary,
       messages: forModel([byId.get(it.chatId)]).at(0)?.messages || [],
@@ -709,6 +715,7 @@ async function repairMissingDrafts(items, conversations) {
     const prompt = `${VOICE}
 
 Decide whether one short, unsent reply can be written safely for every conversation below.
+- Study messages from "me" and match Adam's actual style with this person, including casing, length, directness, warmth, and vocabulary.
 - Use only facts in the messages, summary, and task. Never invent a date, promise, attachment, or completed action.
 - If taskFirst is true, acknowledge the request and state the honest next step without pretending the task is done.
 - If a missing choice or fact changes what Adam should say, set needsClarification to true, ask one specific clarifyingQuestion, and leave draft empty.
@@ -767,7 +774,8 @@ function snapshotMarkdown(items, now) {
       md += `\n`;
       if (it.reason) md += `   Why: ${it.reason}\n`;
       if (it.summary) md += `   ${it.summary}\n`;
-      if (it.task) md += `   Task first: ${it.task}\n`;
+      const tasks = Array.isArray(it.tasks) && it.tasks.length ? it.tasks : (it.task ? [it.task] : []);
+      tasks.forEach((task, taskIndex) => { md += `   Task ${taskIndex + 1}: ${task}\n`; });
       if (f === FATE.BLOCK && it.deliverable) md += `   Deliverable: ${it.deliverable} (~${it.minutes || '?'} min)\n`;
       if (it.nextAction || it.nextStep) md += `   Next action: ${it.nextAction || it.nextStep}\n`;
       if (it.needsClarification && it.clarifyingQuestion) md += `   Before drafting: ${it.clarifyingQuestion}\n`;
@@ -868,7 +876,14 @@ async function getRankedInbox({ scope = 'all' } = {}) {
       const ageBoost = Math.min(Math.floor(days / 7), 8);
       const base = (Number(it.importance) || 3) * (Number(it.urgency) || 3);
       const replyOwed = state.ballInMyCourt && (fate === FATE.QUICK || fate === FATE.BLOCK);
-      const task = fate === FATE.BLOCK ? (it.task || it.deliverable || it.nextStep || '') : '';
+      const proposedTasks = Array.isArray(it.tasks) ? it.tasks : [];
+      const tasks = fate === FATE.BLOCK
+        ? [...new Set([
+            ...proposedTasks,
+            it.task || it.deliverable || it.nextStep || '',
+          ].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 8)
+        : [];
+      const task = tasks[0] || '';
       const needsClarification = replyOwed && (
         it.needsClarification === true
         || String(it.needsClarification || '').toLowerCase() === 'true'
@@ -892,6 +907,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
         weight: relationshipWeight(conv, now),
         replyOwed,
         taskFirst: fate === FATE.BLOCK,
+        tasks,
         task,
         needsClarification,
         clarifyingQuestion,
@@ -917,6 +933,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
       if (it.nextAction) it.nextAction = stripEm(it.nextAction);
       if (it.deliverable) it.deliverable = stripEm(it.deliverable);
       if (it.task) it.task = stripEm(it.task);
+      if (Array.isArray(it.tasks)) it.tasks = it.tasks.map(stripEm).filter(Boolean);
       if (it.clarifyingQuestion) it.clarifyingQuestion = stripEm(it.clarifyingQuestion);
     }
     const eightyTwenty = buildEightyTwenty(items);
@@ -1742,8 +1759,10 @@ const server = createServer(async (req, res) => {
       if (isWhatsAppChatId(id)) {
         const messages = getWhatsAppMessages(id, limit);
         const allStoredMessages = limit >= 200 ? messages : getWhatsAppMessages(id, 4000);
+        const chat = listWhatsAppChats({ includeArchived: true }).find((item) => item.id === id);
         return send(res, 200, {
           messages,
+          unreadCount: Math.max(0, Number(chat?.unreadCount) || 0),
           voiceNotes: voiceNoteStats(allStoredMessages),
           kind: 'chat',
           source: 'whatsapp-direct',
@@ -1764,6 +1783,16 @@ const server = createServer(async (req, res) => {
       return send(res, 200, await sendWhatsAppText({
         chatId: body.chatId,
         text: body.text,
+        requestId: body.requestId,
+      }));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/wa/react') {
+      const body = await readBody(req);
+      if (body.confirmed !== true) return send(res, 400, { error: 'Final confirmation is required.' });
+      return send(res, 200, await sendWhatsAppReaction({
+        chatId: body.chatId,
+        messageId: body.messageId,
+        emoji: body.emoji,
         requestId: body.requestId,
       }));
     }
