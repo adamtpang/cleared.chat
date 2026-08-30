@@ -46,7 +46,10 @@ updates keep it current. A production refresh on 2026-08-28 returned 31 active
 unread chats. The header's primary ranking action is `Triage inbox`. There is
 no voice-triage button in the header. Triage still checks every active,
 unarchived WhatsApp conversation where the other person spoke last or Adam
-still has an open promise because unread and reply-owed are different sets.
+still has an open promise because unread and reply-owed are different sets. Its
+action queue has two hard lanes: actionable unread chats first, then other read
+conversations where Adam still owes a reply or promised work. Importance x
+urgency and age rank conversations only within their lane.
 
 Actionable triage rows expose a `Solved` control. It writes only private
 cleared.chat state in `solved-chats.json`; it never archives, marks read, sends,
@@ -78,11 +81,11 @@ history behind `Show earlier messages`, places an unread divider at WhatsApp's
 count-derived boundary, and starts at the first unread message instead of the
 bottom. After `Triage inbox`, the same pane shows the AI context summary, next
 action, every task-first prerequisite or clarifying question, and loads the
-editable unsent draft into the composer. Triage covers the current unread
-WhatsApp queue and reads up to 30 recent messages per chat; interactive drafting
-reads up to 40. Drafting studies Adam's sent messages in that conversation and
-matches the relationship-specific casing, length, directness, warmth, and
-vocabulary.
+editable unsent draft into the composer. Triage covers actionable unread chats
+plus other reply-owed WhatsApp conversations and reads up to 30 recent messages
+per chat; interactive drafting reads up to 40. Drafting studies Adam's sent
+messages in that conversation and matches the relationship-specific casing,
+length, directness, warmth, and vocabulary.
 
 After triage, the app enters Focus mode by default. Focus mode hides the inbox
 and presents one ranked actionable conversation at a time with a `Priority X of

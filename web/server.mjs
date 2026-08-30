@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import QRCode from 'qrcode';
-import { FATE, assignFate, deriveState, radar as buildRadar, relationshipWeight, redact } from './fates.mjs';
+import { FATE, assignFate, compareTriagePriority, deriveState, radar as buildRadar, relationshipWeight, redact } from './fates.mjs';
 import { verifyKey } from './license.mjs';
 import { fetchGmailInbox, fetchGmailArchive, gmailConfigured, gmailAuthMode } from './gmail-source.mjs';
 import {
@@ -831,7 +831,15 @@ async function getRankedInbox({ scope = 'all' } = {}) {
       discordError = d.error;
     }
     let chats = [...beeperChats, ...gmail.items, ...waChats, ...discordChats];
-    if (scope === 'whatsapp-open') {
+    if (scope === 'whatsapp-triage') {
+      const now = new Date();
+      chats = chats.filter((chat) => {
+        if (chat.source !== 'whatsapp-direct' || chat.isArchived) return false;
+        const state = deriveState(chat, now);
+        const unread = Number(chat.unreadCount ?? chat.unread) > 0;
+        return !state.empty && (unread || state.ballInMyCourt || state.myOpenPromise);
+      });
+    } else if (scope === 'whatsapp-open') {
       const now = new Date();
       chats = chats.filter((chat) => {
         if (chat.source !== 'whatsapp-direct' || chat.isArchived) return false;
@@ -849,7 +857,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
     }
     if (!chats.length) {
       if (scope !== 'all') {
-        throw new Error(scope === 'whatsapp-open'
+        throw new Error(scope === 'whatsapp-open' || scope === 'whatsapp-triage'
           ? 'No active WhatsApp conversations currently look like your turn.'
           : 'No unread chats were found in the current local snapshot.');
       }
@@ -905,6 +913,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
         score: base + ageBoost, base, ageBoost,
         daysWaiting: Math.round(days),
         weight: relationshipWeight(conv, now),
+        unreadCount: Math.max(0, Number(conv.unreadCount ?? conv.unread) || 0),
         replyOwed,
         taskFirst: fate === FATE.BLOCK,
         tasks,
@@ -922,7 +931,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
     items = items.filter((item) => !solvedMatches(item, solvedChats));
     const draftNote = await repairMissingDrafts(items, chats);
     if (draftNote) llmNote = [llmNote, draftNote].filter(Boolean).join(' ');
-    items.sort((a, b) => (b.score || 0) - (a.score || 0));
+    items.sort(compareTriagePriority);
     // Never ship em dashes into the UI or drafts (Adam voice rule).
     const stripEm = (s) => String(s || '').replace(/\u2014/g, ',').replace(/\u2013/g, '-');
     for (const it of items) {
@@ -1645,7 +1654,7 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/inbox') {
       const requestedScope = url.searchParams.get('scope') || 'all';
-      const scope = ['all', 'unread', 'whatsapp-unread', 'whatsapp-open'].includes(requestedScope) ? requestedScope : 'all';
+      const scope = ['all', 'unread', 'whatsapp-unread', 'whatsapp-open', 'whatsapp-triage'].includes(requestedScope) ? requestedScope : 'all';
       return send(res, 200, await getRankedInbox({ scope }));
     }
     if (req.method === 'GET' && url.pathname === '/api/all') return send(res, 200, await getEverything());

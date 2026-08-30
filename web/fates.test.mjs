@@ -2,7 +2,7 @@
 //   node --test web/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FATE, deriveState, calibrate, assignFate, priorityOf, relationshipWeight, radar, redact } from './fates.mjs';
+import { FATE, deriveState, calibrate, assignFate, priorityOf, compareTriagePriority, relationshipWeight, radar, redact } from './fates.mjs';
 
 const NOW = new Date('2026-07-25T12:00:00Z');
 const ago = (days, hours = 0) => new Date(NOW - days * 86400000 - hours * 3600000).toISOString();
@@ -86,6 +86,21 @@ test('priority: age lifts but does not lead', () => {
   assert.equal(stale.priority, 12);
   assert.ok(urgent.priority > stale.priority, 'a real emergency still outranks an old low-stakes thread');
   assert.equal(priorityOf({ importance: 3, urgency: 3, daysWaiting: 400 }).ageBoost, 8, 'age boost caps at 8');
+});
+
+test('triage queues unread chats before other replies owed', () => {
+  const items = [
+    { chatId: 'read-urgent', unreadCount: 0, score: 25, daysWaiting: 12 },
+    { chatId: 'unread-low', unreadCount: 1, score: 6, daysWaiting: 0 },
+    { chatId: 'unread-high', unreadCount: 3, score: 20, daysWaiting: 1 },
+    { chatId: 'read-low', unreadCount: 0, score: 8, daysWaiting: 30 },
+  ].sort(compareTriagePriority);
+  assert.deepEqual(items.map((item) => item.chatId), [
+    'unread-high',
+    'unread-low',
+    'read-urgent',
+    'read-low',
+  ]);
 });
 
 test('relationship weight is learned from behavior, not recency', () => {

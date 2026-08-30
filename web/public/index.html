@@ -1199,7 +1199,13 @@
   function actionQueue(items){
     return items
       .filter(i => i.fate === 'F2_BLOCK' || i.fate === 'F1_QUICK')
-      .sort((a,b) => (b.score||0) - (a.score||0) || (b.daysWaiting||0) - (a.daysWaiting||0));
+      .sort((a,b) => {
+        const unreadA = Number(a.unreadCount ?? a.unread) > 0 ? 1 : 0;
+        const unreadB = Number(b.unreadCount ?? b.unread) > 0 ? 1 : 0;
+        return (unreadB - unreadA)
+          || ((b.score||0) - (a.score||0))
+          || ((b.daysWaiting||0) - (a.daysWaiting||0));
+      });
   }
 
   function taskListFor(item){
@@ -1230,10 +1236,11 @@
     FOCUS_INDEX = Math.max(0, Math.min(FOCUS_INDEX, queue.length - 1));
     const item = queue[FOCUS_INDEX];
     const tasks = taskListFor(item);
+    const lane = Number(item.unreadCount ?? item.unread) > 0 ? 'Unread' : 'Reply owed';
     $('#focuscount').textContent = 'Priority ' + (FOCUS_INDEX + 1) + ' of ' + queue.length;
-    $('#focusstatus').textContent = tasks.length
+    $('#focusstatus').textContent = lane + ', ' + (tasks.length
       ? tasks.length + ' task' + (tasks.length === 1 ? '' : 's') + ' before reply, ' + queue.length + ' chats left'
-      : 'Draft ready, ' + queue.length + ' chats left';
+      : 'draft ready, ' + queue.length + ' chats left');
     $('#focusprev').disabled = FOCUS_INDEX === 0;
     $('#focusnext').disabled = FOCUS_INDEX >= queue.length - 1;
   }
@@ -1281,7 +1288,7 @@
     return '<div class="cut8020" id="cut8020">'
       + '<div class="kicker">80/20 · do these first</div>'
       + '<div class="headline">Respond in this order. Top '+top.length+' of '+action.length+' action chats.</div>'
-      + '<div class="blurb">Everything else can wait. Open a row to review its task and draft.</div>'
+      + '<div class="blurb">Unread chats come first. Importance and urgency rank each lane.</div>'
       + '<ol>'+top.map((it,i)=>
           '<li onclick="jumpTo(\''+it.chatId+'\')">'
           + '<span class="rn">#'+(i+1)+'</span>'
@@ -1379,17 +1386,12 @@
     items.forEach(it => { window.__items[it.chatId] = it; if (it.draft) it.draft = noEm(it.draft); });
 
     const action = actionQueue(items);
-    const taskFirst = action.filter(it => it.fate === 'F2_BLOCK');
-    const ready = action.filter(it => it.fate === 'F1_QUICK');
     const topN = (et && et.topCount) ? et.topCount : Math.max(1, Math.ceil(action.length * 0.2));
     const topSet = new Set(action.slice(0, topN).map(i => i.chatId));
     let html = '<div class="cleanlist">';
     html += render8020(action, et);
-    html += folder('task-first', 'Tasks before reply', 'Complete the prerequisite, then use the unsent holding draft.', taskFirst, {
+    html += folder('reply-queue', 'Reply queue', 'Unread first, then other replies you still owe.', action, {
       defaultOpen: true, priority: true, ranked: true, topSet, rankOffset: 0
-    });
-    html += folder('ready', 'Drafts ready', 'These can be reviewed and replied to now.', ready, {
-      defaultOpen: true, priority: true, ranked: true, topSet, rankOffset: taskFirst.length
     });
     html += '</div>';
     list.innerHTML = html;
@@ -2732,15 +2734,14 @@
   async function runTriage(){
     const b = $('#run'); b.disabled = true; b.textContent = 'Triaging…';
     $('#err').innerHTML = '';
-    $('#list').innerHTML = '<div class="state">Reading every unread WhatsApp chat, building context, then ranking the next actions.</div>';
+    $('#list').innerHTML = '<div class="state">Reading unread WhatsApp chats first, then every other conversation where you still owe a reply.</div>';
     startProg();
     try{
-      // The unread sync is the source of truth for this speedrun. Triage reads
-      // each unread conversation, then separates replies, task-first loops,
-      // waiting, and chats that need no response.
+      // Triage has two hard lanes: actionable unread chats first, then other
+      // conversations where Adam still owes a reply or promised work.
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 10 * 60 * 1000);
-      const data = await (await fetch('/api/inbox?scope=whatsapp-unread', { signal: ctrl.signal })).json();
+      const data = await (await fetch('/api/inbox?scope=whatsapp-triage', { signal: ctrl.signal })).json();
       clearTimeout(to);
       if(data.error) throw new Error(data.error);
       const llm = data.llm || (data.demo ? 'demo' : '');
