@@ -131,6 +131,14 @@ Every rendered message bubble shows an exact local hour and minute. Messages
 from yesterday include `Yesterday`; older messages include their date. The full
 local date and time remains available in the timestamp tooltip.
 
+Received and sent WhatsApp images are cached under the account's private
+WhatsApp data directory and served only through the authenticated app API.
+Conversation bubbles show the responsive image, preserve an optional caption,
+and open the cached image at full size when Adam clicks it. The browser receives
+media through authenticated fetches and short-lived object URLs, never a public
+WhatsApp CDN URL. A small message thumbnail is used only when the full image is
+no longer available from WhatsApp.
+
 The production image includes the Faster Whisper `tiny` model under
 `/opt/cleared-whisper`, so first-use model downloads cannot interrupt voice-note
 jobs. Expired WhatsApp media gets an explicit reupload retry. A failed voice

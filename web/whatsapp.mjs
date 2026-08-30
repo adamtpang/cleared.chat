@@ -20,6 +20,7 @@ import {
 } from 'baileys';
 import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode-terminal';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
@@ -32,6 +33,8 @@ const DIR = dirname(fileURLToPath(import.meta.url));
 // fresh into a new one.
 const DATA_DIR = () => process.env.WA_DATA_DIR || DIR;
 const AUTH_POINTER_FILE = () => join(DATA_DIR(), 'wa-auth-current.json');
+const MEDIA_DIR = () => join(DATA_DIR(), 'media');
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 function hasUsableCredentials(creds) {
   return Boolean(
@@ -451,6 +454,29 @@ export function messageTextForDisplay(m) {
   return '';
 }
 
+export function imageInfoForDisplay(m) {
+  const image = contentOf(m).imageMessage;
+  if (!image) return null;
+  const mimetype = /^image\/[a-z0-9.+-]+$/i.test(String(image.mimetype || ''))
+    ? String(image.mimetype)
+    : 'image/jpeg';
+  let thumbnailDataUrl = null;
+  try {
+    const thumbnail = image.jpegThumbnail ? Buffer.from(image.jpegThumbnail) : null;
+    if (thumbnail?.length && thumbnail.length <= 256 * 1024) {
+      thumbnailDataUrl = `data:image/jpeg;base64,${thumbnail.toString('base64')}`;
+    }
+  } catch { /* a missing or malformed thumbnail is non-fatal */ }
+  return {
+    kind: 'image',
+    mimetype,
+    width: numeric(image.width),
+    height: numeric(image.height),
+    fileSize: numeric(image.fileLength),
+    thumbnailDataUrl,
+  };
+}
+
 const CONTROL_PLACEHOLDER = /^\[(?:protocolMessage|senderKeyDistributionMessage|messageContextInfo|deviceSentMessage|historySyncNotification|appStateSyncKey(?:Share|Request|Fingerprint)|syncAction|reactionMessage|pollUpdateMessage|keepInChatMessage|pinInChatMessage|requestPhoneNumberMessage)\]$/i;
 
 export function isVisibleStoredMessage(message = {}) {
@@ -596,7 +622,15 @@ const voiceJobs = new Map();
 const voiceRecoveryRequests = new Map();
 const mediaLogger = pino({ level: 'silent' });
 
-async function downloadVoiceAudio(proto) {
+function imageCacheKey(jid, messageId) {
+  return createHash('sha256').update(`${jid}\n${messageId}`).digest('hex');
+}
+
+function imageCachePath(cacheKey) {
+  return join(MEDIA_DIR(), `${cacheKey}.media`);
+}
+
+async function downloadMessageMedia(proto) {
   const reuploadRequest = sock?.updateMediaMessage?.bind(sock);
   const context = reuploadRequest ? { logger: mediaLogger, reuploadRequest } : undefined;
   try {
@@ -607,6 +641,76 @@ async function downloadVoiceAudio(proto) {
     const refreshed = await sock.updateMediaMessage(proto);
     return downloadMediaMessage(refreshed, 'buffer', {}, context);
   }
+}
+
+async function downloadVoiceAudio(proto) {
+  return downloadMessageMedia(proto);
+}
+
+const imageJobs = new Map();
+const imageQueue = [];
+let activeImageJobs = 0;
+
+function drainImageQueue() {
+  while (activeImageJobs < 2 && imageQueue.length) {
+    const job = imageQueue.shift();
+    activeImageJobs++;
+    Promise.resolve().then(job.run).then(job.resolve, job.reject).finally(() => {
+      activeImageJobs--;
+      imageJobs.delete(job.key);
+      drainImageQueue();
+    });
+  }
+}
+
+function queueImageCache(jid, proto, stored) {
+  const messageId = String(stored?.key || proto?.key?.id || '');
+  if (!messageId) return Promise.resolve(null);
+  const cacheKey = stored.cacheKey || imageCacheKey(jid, messageId);
+  stored.cacheKey = cacheKey;
+  const path = imageCachePath(cacheKey);
+  if (existsSync(path)) {
+    stored.mediaStatus = 'ready';
+    return Promise.resolve(stored);
+  }
+  if (imageJobs.has(cacheKey)) return imageJobs.get(cacheKey);
+
+  let resolveJob;
+  let rejectJob;
+  const promise = new Promise((resolve, reject) => {
+    resolveJob = resolve;
+    rejectJob = reject;
+  });
+  imageJobs.set(cacheKey, promise);
+  imageQueue.push({
+    key: cacheKey,
+    resolve: resolveJob,
+    reject: rejectJob,
+    run: async () => {
+      // History syncs can contain thousands of old images. Cache only media
+      // that survived the bounded message store after the synchronous ingest.
+      if (!(messagesById.get(jid) || []).includes(stored)) return null;
+      stored.mediaStatus = 'downloading';
+      scheduleSave();
+      try {
+        const buffer = await downloadMessageMedia(proto);
+        if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error('empty image');
+        if (buffer.length > MAX_IMAGE_BYTES) throw new Error('image exceeds private cache limit');
+        mkdirSync(MEDIA_DIR(), { recursive: true, mode: 0o700 });
+        writeFileSync(path, buffer, { mode: 0o600 });
+        stored.mediaStatus = 'ready';
+        stored.cachedBytes = buffer.length;
+        stored.mediaError = null;
+      } catch {
+        stored.mediaStatus = stored.thumbnailDataUrl ? 'thumbnail' : 'failed';
+        stored.mediaError = 'Image unavailable from WhatsApp.';
+      }
+      scheduleSave();
+      return stored;
+    },
+  });
+  drainImageQueue();
+  return promise;
 }
 
 function updateVoiceProgress(stored, progress = {}) {
@@ -935,7 +1039,8 @@ function ingestProtoMessages(msgs) {
     }
     const text = messageTextForDisplay(m);
     const voice = voiceInfo(m);
-    if (!text && !voice) continue;
+    const image = imageInfoForDisplay(m);
+    if (!text && !voice && !image) continue;
     const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp) * 1000).toISOString() : new Date().toISOString();
     const stored = appendMessage(jid, {
       key: m.key?.id,
@@ -944,6 +1049,11 @@ function ingestProtoMessages(msgs) {
       senderName: m.pushName || jid.split('@')[0],
       text,
       timestamp: ts,
+      ...(image ? {
+        ...image,
+        cacheKey: imageCacheKey(jid, m.key?.id || `${ts}:${text}`),
+        mediaStatus: 'pending',
+      } : {}),
       ...(voice ? {
         kind: 'voice',
         mimetype: voice.mimetype,
@@ -952,6 +1062,15 @@ function ingestProtoMessages(msgs) {
         transcriptionStatus: 'pending',
       } : {}),
     });
+    // A reconnect can re-deliver a richer media proto for a placeholder that
+    // was already in the local store. Merge the metadata before caching.
+    if (image) {
+      Object.assign(stored, image, {
+        cacheKey: stored.cacheKey || imageCacheKey(jid, m.key?.id || `${ts}:${text}`),
+        mediaStatus: stored.mediaStatus === 'ready' ? 'ready' : 'pending',
+      });
+      void queueImageCache(jid, m, stored).catch(() => {});
+    }
     if (voice && stored.transcriptionStatus !== 'complete') queueVoiceTranscription(jid, m, stored);
     const liveName = !m.key?.fromMe && !jid.endsWith('@g.us')
       ? String(m.pushName || '').trim()
@@ -1258,6 +1377,43 @@ export function getMessages(chatId, limit = 20) {
   if (!chatsById.size) loadStore();
   const list = messagesById.get(canonicalWhatsAppJid(whatsappJid(chatId))) || [];
   return list.filter(isVisibleStoredMessage).slice(-limit);
+}
+
+export async function getMessageImage({ chatId, messageId } = {}) {
+  if (!chatsById.size) loadStore();
+  const jid = canonicalWhatsAppJid(whatsappJid(chatId));
+  const id = String(messageId || '').trim();
+  if (!jid || !id) return null;
+  const stored = (messagesById.get(jid) || [])
+    .find((message) => message.key === id && (message.kind === 'image' || message.text === '[image]'));
+  if (!stored) return null;
+  const cacheKey = stored.cacheKey || imageCacheKey(jid, id);
+  stored.cacheKey = cacheKey;
+  const pending = imageJobs.get(cacheKey);
+  if (pending) {
+    await Promise.race([
+      pending.catch(() => null),
+      new Promise((resolve) => setTimeout(resolve, 12_000)),
+    ]);
+  }
+  const path = imageCachePath(cacheKey);
+  if (existsSync(path)) {
+    return {
+      buffer: readFileSync(path),
+      mimetype: /^image\//i.test(String(stored.mimetype || '')) ? stored.mimetype : 'image/jpeg',
+      quality: 'full',
+    };
+  }
+  const thumbnail = String(stored.thumbnailDataUrl || '')
+    .match(/^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=]+)$/i);
+  if (thumbnail) {
+    return {
+      buffer: Buffer.from(thumbnail[2], 'base64'),
+      mimetype: thumbnail[1],
+      quality: 'thumbnail',
+    };
+  }
+  return null;
 }
 
 const profilePhotoRequests = new Map();

@@ -23,6 +23,7 @@ import {
   ensureWhatsAppStarted,
   listChats as listWhatsAppChats,
   getMessages as getWhatsAppMessages,
+  getMessageImage as getWhatsAppMessageImage,
   getStatus as whatsAppStatus,
   getProfilePhoto as getWhatsAppProfilePhoto,
   hydrateGroupNames as hydrateWhatsAppGroupNames,
@@ -1785,6 +1786,20 @@ const server = createServer(async (req, res) => {
         .filter((x) => x.text)
         .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       return send(res, 200, { messages, kind: 'chat' });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/wa/media') {
+      const chatId = url.searchParams.get('chatId') || '';
+      const messageId = url.searchParams.get('messageId') || '';
+      const media = await getWhatsAppMessageImage({ chatId, messageId });
+      if (!media) return send(res, 404, { error: 'Image unavailable.' });
+      res.writeHead(200, {
+        'Content-Type': media.mimetype,
+        'Content-Length': media.buffer.length,
+        'Cache-Control': 'private, max-age=3600',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Cleared-Media-Quality': media.quality,
+      });
+      return res.end(media.buffer);
     }
     if (req.method === 'POST' && url.pathname === '/api/wa/send') {
       const body = await readBody(req);

@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   canonicalWhatsAppJid,
+  getMessageImage,
+  imageInfoForDisplay,
   isWhatsAppChatId,
   isVisibleStoredMessage,
   messageTextForDisplay,
@@ -207,4 +212,60 @@ test('visible WhatsApp attachments keep useful placeholders', () => {
   assert.equal(messageTextForDisplay({ message: { imageMessage: {} } }), '[image]');
   assert.equal(messageTextForDisplay({ message: { documentMessage: { fileName: 'brief.pdf' } } }), 'brief.pdf');
   assert.equal(isVisibleStoredMessage({ text: '[voice note, transcribing locally]' }), true);
+});
+
+test('WhatsApp images retain private display metadata and a thumbnail fallback', () => {
+  const image = imageInfoForDisplay({
+    message: {
+      imageMessage: {
+        mimetype: 'image/png',
+        width: 1280,
+        height: 720,
+        fileLength: 4096,
+        jpegThumbnail: Buffer.from('thumbnail'),
+      },
+    },
+  });
+  assert.equal(image.kind, 'image');
+  assert.equal(image.mimetype, 'image/png');
+  assert.equal(image.width, 1280);
+  assert.equal(image.height, 720);
+  assert.equal(image.fileSize, 4096);
+  assert.match(image.thumbnailDataUrl, /^data:image\/jpeg;base64,/);
+});
+
+test('private image endpoint data falls back to the stored thumbnail', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cleared-image-test-'));
+  const previous = process.env.WA_DATA_DIR;
+  process.env.WA_DATA_DIR = directory;
+  try {
+    writeFileSync(join(directory, 'wa-store.json'), JSON.stringify({
+      chats: [{
+        id: '60123456789@s.whatsapp.net',
+        title: 'Test contact',
+        lastActivity: '2026-08-30T12:00:00.000Z',
+      }],
+      messages: {
+        '60123456789@s.whatsapp.net': [{
+          key: '3EB0123456789ABCDE',
+          kind: 'image',
+          text: '[image]',
+          mimetype: 'image/jpeg',
+          timestamp: '2026-08-30T12:00:00.000Z',
+          thumbnailDataUrl: `data:image/jpeg;base64,${Buffer.from('private-thumbnail').toString('base64')}`,
+        }],
+      },
+    }));
+    const media = await getMessageImage({
+      chatId: 'wa:60123456789@s.whatsapp.net',
+      messageId: '3EB0123456789ABCDE',
+    });
+    assert.equal(media.quality, 'thumbnail');
+    assert.equal(media.mimetype, 'image/jpeg');
+    assert.equal(media.buffer.toString(), 'private-thumbnail');
+  } finally {
+    if (previous === undefined) delete process.env.WA_DATA_DIR;
+    else process.env.WA_DATA_DIR = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
