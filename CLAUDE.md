@@ -98,8 +98,17 @@ restored with the latest saved triage after reload.
 A visible AI-output banner distinguishes a current model-backed triage from an
 old offline snapshot. It reports the number of unsent drafts and task chats,
 links directly into Focus, and offers `Run fresh triage` when a restored run has
-tasks but no AI drafts. Never hide the offline or stale-snapshot explanation in
-a non-rendered status element.
+tasks but no AI drafts. Pressing that action hides the old banner immediately
+and replaces it with a global progress band that remains visible in Inbox and
+Focus. The band names each stage, explains what is happening, reports completed
+conversation counts, elapsed time, and percentage, and keeps failures visible.
+
+The primary top bar contains only Settings, Focus when a queue exists, and
+`Triage inbox`. Manual data controls, account management, density, theme, and
+text sizing live in Settings. A conversation header shows only `Cleared`,
+`Draft a reply`, and one overflow menu for naming, transcript export, full
+export, and thread questions. Keep secondary controls out of the primary daily
+flow.
 
 WhatsApp protocol, key-distribution, history-sync, and app-state events are
 control traffic. `web/whatsapp.mjs` drops them at ingestion and removes old
