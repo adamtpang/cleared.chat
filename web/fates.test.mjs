@@ -47,6 +47,7 @@ test('a shared group deadline stays actionable without naming me', () => {
   msgs.push(them('Everyone please check out by 12pm today unless you have an arrangement.', ago(0, 1)));
   const r = assignFate(conv({ type: 'group', messages: msgs }), FATE.BLOCK, NOW);
   assert.equal(r.fate, FATE.BLOCK, 'a deadline applying to everyone should beat the burst rule');
+  assert.match(r.state.sharedDeadlineText, /check out by 12pm today/i);
 });
 
 test('"ok cool" after a resolved thread is LET_GO, not a reply prompt', () => {
