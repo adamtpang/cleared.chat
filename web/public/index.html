@@ -1249,9 +1249,16 @@
         || item.fate === 'F2_BLOCK'
         || item.fate === 'F1_QUICK')
       .sort((a,b) => {
-        const unreadA = Number(a.unreadCount ?? a.unread) > 0 ? 1 : 0;
-        const unreadB = Number(b.unreadCount ?? b.unread) > 0 ? 1 : 0;
-        return (unreadB - unreadA)
+        const lane = (item) => item.fate === 'F2_BLOCK' ? 4
+          : item.fate === 'F1_QUICK' ? 3
+          : item.fate === 'UNCLEAR' ? 2
+          : item.fate === 'F3_WAITING' ? 1 : 0;
+        const fresh = (item) => Number(item.daysWaiting||0) <= 2 ? 2
+          : Number(item.daysWaiting||0) <= 14 ? 1 : 0;
+        return (lane(b) - lane(a))
+          || (fresh(b) - fresh(a))
+          || ((b.importance||0) - (a.importance||0))
+          || ((b.urgency||0) - (a.urgency||0))
           || ((b.score||0) - (a.score||0))
           || ((b.daysWaiting||0) - (a.daysWaiting||0));
       });
