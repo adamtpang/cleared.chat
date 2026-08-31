@@ -548,6 +548,19 @@
   .chat-brief .brief-task::before{content:"";width:15px;height:15px;border:1.5px solid var(--line-2);border-radius:4px;flex:none;margin-top:2px}
   .chat-brief .brief-ready{font-size:13px;color:var(--ok);font-weight:650;line-height:1.45}
   .chat-brief .brief-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .chat-plan{border-top:1px solid var(--line);margin-top:var(--space-3x);padding-top:var(--space-3x)}
+  .chat-plan-title{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3x);font-size:12px;font-weight:800;color:var(--ink)}
+  .chat-plan-stale{font-size:11px;font-weight:650;color:var(--warn)}
+  .plan-explanation,.plan-task{display:block;width:100%;margin-top:8px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface);color:var(--ink);font:500 13px/1.45 var(--font);padding:9px 10px;resize:vertical}
+  .plan-explanation{min-height:68px}
+  .plan-task{min-height:38px;resize:none}
+  .plan-explanation:focus,.plan-task:focus{outline:2px solid var(--ring);outline-offset:1px;border-color:transparent}
+  .plan-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:8px;padding:3px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+  .plan-options button{min-height:34px;border:0;border-radius:6px;background:transparent;color:var(--muted-foreground);font:700 11.5px var(--font);cursor:pointer;padding:6px}
+  .plan-options button:hover{color:var(--ink);background:var(--hover)}
+  .plan-options button.on{color:var(--primary-foreground);background:var(--primary)}
+  .plan-save-row{display:flex;align-items:center;gap:10px;margin-top:8px}
+  .plan-status{font-size:11.5px;color:var(--muted-foreground)}
   .unread-divider{display:flex;align-items:center;gap:10px;color:var(--primary);font-size:11px;font-weight:800;margin:4px 0 8px}
   .unread-divider::before,.unread-divider::after{content:"";height:1px;background:color-mix(in oklch,var(--primary) 42%,transparent);flex:1}
   .earlier-toggle{align-self:center;border:1px solid var(--line-2);background:var(--bg);color:var(--muted-foreground);font:650 11.5px var(--font);padding:6px 11px;border-radius:var(--r-full);cursor:pointer;margin-bottom:4px}
@@ -623,6 +636,7 @@
     body.focus-mode .chatbody{padding:var(--space-3x)}
     body.focus-mode .composer{padding:10px var(--space-3x)}
     .chat-brief .brief-grid{grid-template-columns:1fr}
+    .plan-options{grid-template-columns:1fr 1fr}
   }
   @media (max-width:700px){.voicebar{align-items:flex-start;flex-direction:column}.voicectls{width:100%;flex-wrap:wrap}}
   @media (max-width:620px){.prog{grid-template-columns:1fr;row-gap:6px}.prog .stats{grid-row:1;grid-column:1;justify-self:end}.prog .lbl{padding-right:80px}.prog .track{grid-column:1}}
@@ -1230,14 +1244,24 @@
   }
 
   function focusQueue(){
-    return actionQueue(LATEST_TRIAGE_ITEMS);
+    return [...LATEST_TRIAGE_ITEMS]
+      .filter((item) => Number(item.unreadCount ?? item.unread) > 0
+        || item.fate === 'F2_BLOCK'
+        || item.fate === 'F1_QUICK')
+      .sort((a,b) => {
+        const unreadA = Number(a.unreadCount ?? a.unread) > 0 ? 1 : 0;
+        const unreadB = Number(b.unreadCount ?? b.unread) > 0 ? 1 : 0;
+        return (unreadB - unreadA)
+          || ((b.score||0) - (a.score||0))
+          || ((b.daysWaiting||0) - (a.daysWaiting||0));
+      });
   }
 
   function updateFocusBar(){
     const queue = focusQueue();
     const button = $('#focusbtn');
     button.hidden = !queue.length;
-    button.textContent = FOCUS_MODE ? 'Show inbox' : 'Focus';
+    button.textContent = FOCUS_MODE ? 'Show inbox' : 'Plan today';
     $('#focusbar').classList.toggle('on', FOCUS_MODE && queue.length > 0);
     if(!queue.length){
       FOCUS_INDEX = 0;
@@ -1253,9 +1277,10 @@
     const tasks = taskListFor(item);
     const lane = Number(item.unreadCount ?? item.unread) > 0 ? 'Unread' : 'Reply owed';
     $('#focuscount').textContent = 'Priority ' + (FOCUS_INDEX + 1) + ' of ' + queue.length;
+    const planned = queue.filter((entry) => entry.userPlan && !entry.userPlan.stale).length;
     $('#focusstatus').textContent = lane + ', ' + (tasks.length
-      ? tasks.length + ' task' + (tasks.length === 1 ? '' : 's') + ' before reply, ' + queue.length + ' chats left'
-      : 'draft ready, ' + queue.length + ' chats left');
+      ? tasks.length + ' task' + (tasks.length === 1 ? '' : 's') + ' before reply, '
+      : '') + planned + ' planned, ' + queue.length + ' inbox chats left';
     $('#focusprev').disabled = FOCUS_INDEX === 0;
     $('#focusnext').disabled = FOCUS_INDEX >= queue.length - 1;
   }
@@ -2165,8 +2190,14 @@
     clearMessageImageUrls();
     $('#chatbody').innerHTML = '<div class="chatempty">Loading conversation…</div>';
     // Point the draft assistant at whoever is open, so "draft a reply" means this one.
-    setCtx({ id: it.id, who: it.who, network: it.network });
     const triaged = LATEST_TRIAGE_ITEMS.find((item) => item.chatId === id);
+    setCtx({
+      id: it.id,
+      who: it.who,
+      network: it.network,
+      conversationVersion: triaged?.conversationVersion || it.lastAt || '',
+      userPlan: triaged?.userPlan || null,
+    });
     setComposer(noEm(triaged?.draft || ''));
     try{
       const d = await (await fetch('/api/messages?id='+encodeURIComponent(id)+'&limit=80')).json();
@@ -2209,6 +2240,102 @@
     return 0;
   }
 
+  function inferredPlanOutcome(item){
+    if(item.fate === 'F2_BLOCK') return 'task';
+    if(item.fate === 'F3_WAITING') return 'waiting';
+    if(item.fate === 'F4_LET_GO') return 'no-reply';
+    return 'reply';
+  }
+
+  function planEditor(item){
+    const saved = item.userPlan || null;
+    const outcome = saved && !saved.stale ? saved.outcome : inferredPlanOutcome(item);
+    const explanation = saved?.explanation || '';
+    const task = saved?.task || taskListFor(item)[0] || '';
+    const options = [
+      ['reply', 'Reply'],
+      ['task', 'Task first'],
+      ['waiting', 'Waiting'],
+      ['no-reply', 'No reply'],
+    ];
+    return '<div class="chat-plan" data-chat-id="'+attr(item.chatId)+'" data-outcome="'+attr(outcome)+'">'
+      + '<div class="chat-plan-title"><span>Plan this chat</span>'
+      + (saved?.stale ? '<span class="chat-plan-stale">New message arrived. Review again.</span>' : '')
+      + '</div>'
+      + '<textarea class="plan-explanation" placeholder="Why is this still open? What decision or context is missing?">'+esc(explanation)+'</textarea>'
+      + '<div class="plan-options" role="group" aria-label="Choose the outcome">'
+      + options.map(([value,label]) => '<button type="button" class="'+(outcome===value?'on':'')+'" data-plan-outcome="'+value+'" onclick="chooseChatPlan(this,'+jsq(value)+')">'+label+'</button>').join('')
+      + '</div>'
+      + '<textarea class="plan-task" placeholder="What must happen before you can reply?" '+(outcome==='task'?'':'hidden')+'>'+esc(task)+'</textarea>'
+      + '<div class="plan-save-row"><button class="act primary" onclick="saveChatPlanFromBrief('+jsq(item.chatId)+',this)">Save plan</button><span class="plan-status">'+(saved && !saved.stale ? 'Saved for this conversation.' : '')+'</span></div>'
+      + '</div>';
+  }
+
+  function chooseChatPlan(button, outcome){
+    const plan = button.closest('.chat-plan');
+    if(!plan) return;
+    plan.dataset.outcome = outcome;
+    plan.querySelectorAll('[data-plan-outcome]').forEach((option) => option.classList.toggle('on', option.dataset.planOutcome === outcome));
+    const task = plan.querySelector('.plan-task');
+    if(task) task.hidden = outcome !== 'task';
+  }
+
+  function applyPlanLocally(item, plan){
+    item.userPlan = plan;
+    item.reason = 'Your explanation: ' + plan.explanation;
+    item.needsClarification = false;
+    item.clarifyingQuestion = '';
+    if(plan.outcome === 'reply'){
+      item.fate = 'F1_QUICK'; item.replyOwed = true; item.taskFirst = false;
+      item.tasks = []; item.task = ''; item.nextAction = 'Draft and review the reply.';
+    }else if(plan.outcome === 'task'){
+      item.fate = 'F2_BLOCK'; item.replyOwed = true; item.taskFirst = true;
+      item.tasks = [plan.task]; item.task = plan.task; item.nextAction = plan.task;
+    }else{
+      item.fate = plan.outcome === 'waiting' ? 'F3_WAITING' : 'F4_LET_GO';
+      item.replyOwed = false; item.taskFirst = false; item.tasks = []; item.task = ''; item.draft = '';
+      item.nextAction = plan.outcome === 'waiting'
+        ? 'Wait for them. Mark cleared after review.'
+        : 'No reply needed. Mark cleared after review.';
+    }
+  }
+
+  async function saveChatPlanFromBrief(chatId, button){
+    const item = LATEST_TRIAGE_ITEMS.find((entry) => entry.chatId === chatId);
+    const plan = button.closest('.chat-plan');
+    if(!item || !plan) return;
+    const status = plan.querySelector('.plan-status');
+    const body = {
+      chatId,
+      conversationVersion: item.conversationVersion,
+      outcome: plan.dataset.outcome || inferredPlanOutcome(item),
+      explanation: noEm(plan.querySelector('.plan-explanation')?.value || ''),
+      task: noEm(plan.querySelector('.plan-task')?.value || ''),
+    };
+    button.disabled = true;
+    status.textContent = 'Saving';
+    try{
+      const response = await fetch('/api/plan', {
+        method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body),
+      });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Could not save plan');
+      applyPlanLocally(item, data.plan);
+      if(ctx?.id === chatId) setCtx({ ...ctx, userPlan:data.plan });
+      const actions = actionQueue(LATEST_TRIAGE_ITEMS);
+      const meta = currentTriageMeta(LATEST_TRIAGE_ITEMS);
+      $('#cntPriority').textContent = actions.length;
+      renderFates(LATEST_TRIAGE_ITEMS, meta);
+      setVoiceQueue(actions);
+      updateFocusBar();
+      status.textContent = 'Saved for this conversation. Mark Cleared when done.';
+    }catch(error){
+      status.textContent = noEm(error.message || error);
+    }finally{
+      button.disabled = false;
+    }
+  }
+
   function chatBriefing(it, triaged){
     if(!triaged){
       if(!(Number(it.unread) > 0)) return '';
@@ -2233,6 +2360,7 @@
     return '<section class="chat-brief">'
       + '<div class="brief-kicker">AI briefing · priority '+esc(String(triaged.score || ''))+'</div>'
       + '<div class="brief-summary">'+esc(noEm(triaged.summary || triaged.reason || 'Review the unread messages below.'))+'</div>'
+      + planEditor(triaged)
       + '<div class="brief-grid">'
       +   '<div class="brief-block"><div class="brief-label">Tasks before reply</div>'+taskHtml+'</div>'
       +   '<div class="brief-block"><div class="brief-label">Draft status</div>'+draftState+'</div>'
@@ -2729,7 +2857,7 @@
     notice.hidden = false;
     notice.innerHTML = '<div class="notice-copy"><div class="notice-title">'+esc(title)+'</div>'
       + '<div class="notice-detail">'+esc(detail)+'</div></div>'
-      + (warning ? '<button class="act primary" onclick="runTriage()">Run fresh triage</button>' : '<button class="act" onclick="enterFocusMode()">Open Focus</button>');
+      + (warning ? '<button class="act primary" onclick="runTriage()">Run fresh triage</button>' : '<button class="act" onclick="enterFocusMode()">Open daily plan</button>');
   }
 
   async function loadLatestTriage(openWhenReady){
@@ -2750,7 +2878,8 @@
       setVoiceQueue(action);
       showTriageOutputStatus(data, action);
       updateFocusBar();
-      if(action.length && (openWhenReady || localStorage.getItem('cc-focus-mode') === '1')) await enterFocusMode(action[0].chatId);
+      const focus = focusQueue();
+      if(focus.length && (openWhenReady || localStorage.getItem('cc-focus-mode') === '1')) await enterFocusMode(focus[0].chatId);
       else if(TAB === 'priorities') renderFates(LATEST_TRIAGE_ITEMS, LATEST_TRIAGE_META);
     }catch{}
   }
@@ -2957,7 +3086,8 @@
       setTab('priorities');
       setVoiceQueue(action);
       updateFocusBar();
-      if(action[0]) setTimeout(() => enterFocusMode(action[0].chatId), 0);
+      const focus = focusQueue();
+      if(focus[0]) setTimeout(() => enterFocusMode(focus[0].chatId), 0);
       if(voiceAutoStart){
         voiceAutoStart = false;
         setTimeout(startVoiceReview, 50);

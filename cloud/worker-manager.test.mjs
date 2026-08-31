@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { WorkerManager, workerEnvironment, workerPaths } from './worker-manager.mjs';
+import { redactWorkerLog, WorkerManager, workerEnvironment, workerPaths } from './worker-manager.mjs';
+
+test('worker logs redact WhatsApp key buffers', () => {
+  const output = redactWorkerLog('privKey: <Buffer 05 aa bb cc>, status: reconnecting');
+  assert.equal(output, 'privKey: <Buffer redacted>, status: reconnecting');
+});
 
 test('gives every account isolated WhatsApp and snapshot paths', () => {
   const first = workerPaths('/data', 'first-user');

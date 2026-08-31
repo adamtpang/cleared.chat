@@ -1700,7 +1700,7 @@ export async function ensureWhatsAppStarted() {
   registrationConfirmed = true;
   setConnectionStatus('connecting', 'Restoring the saved WhatsApp connection.');
   started = connectWhatsApp({ printQrToTerminal: false }).catch((e) => {
-    console.error('[whatsapp] failed to start:', e.message || e);
+    console.error('[whatsapp] failed to start:', typeof e?.message === 'string' ? e.message : 'WhatsApp startup failed');
     started = null;
   });
   return started;

@@ -41,6 +41,7 @@ import {
 } from './whatsapp.mjs';
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
 import { buildVoiceNotesMarkdown, voiceNoteStats } from './voice-export.mjs';
+import { applyChatPlan, planForConversation, readChatPlans, saveChatPlan } from './chat-plans.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -551,6 +552,12 @@ function forModel(convs) {
   return convs.map((c) => ({
     chatId: c.id, who: c.title, network: c.network, type: c.type, muted: c.isMuted,
     unreadCount: Math.max(0, Number(c.unreadCount || c.unread) || 0),
+    userPlan: c.userPlan ? {
+      outcome: c.userPlan.outcome,
+      explanation: redact(c.userPlan.explanation),
+      task: redact(c.userPlan.task),
+      stale: Boolean(c.userPlan.stale),
+    } : undefined,
     messages: (c.messages || []).slice(-30).map((m) => ({
       from: m.isSender ? 'me' : (m.senderName || 'them'),
       at: m.timestamp,
@@ -587,6 +594,7 @@ Calibration, these matter:
 - Recency is not importance. An old message from someone who matters outranks 40 messages from this morning.
 - "ok cool" after a resolved thread is F4_LET_GO, not a reply prompt.
 - If I sent the last message, it is F3_WAITING, not F1_QUICK.
+- A non-stale userPlan is Adam's explicit explanation and desired outcome. Follow it. A stale plan is context only because a newer message arrived.
 
 Return EXACTLY one object per input chat, no skips or merges:
 chatId, who, network, importance (1-5), urgency (1-5), score (importance*urgency),
@@ -711,6 +719,11 @@ async function repairMissingDrafts(items, conversations) {
       tasks: it.tasks,
       task: it.task,
       summary: it.summary,
+      userPlan: it.userPlan ? {
+        outcome: it.userPlan.outcome,
+        explanation: it.userPlan.explanation,
+        task: it.userPlan.task,
+      } : undefined,
       messages: forModel([byId.get(it.chatId)]).at(0)?.messages || [],
     }));
     const prompt = `${VOICE}
@@ -822,7 +835,9 @@ async function getRankedInbox({ scope = 'all' } = {}) {
         await ensureWhatsAppStarted();
         await hydrateWhatsAppGroupNames();
         waChats = listWhatsAppChats({ includeArchived: false });
-      } catch (e) { console.error('[whatsapp-direct]', e.message || e); }
+      } catch (e) {
+        console.error('[whatsapp-direct]', typeof e?.message === 'string' ? e.message : 'WhatsApp source unavailable');
+      }
     }
     let discordChats = [];
     let discordError = null;
@@ -868,6 +883,13 @@ async function getRankedInbox({ scope = 'all' } = {}) {
         : 'No messaging source is connected. Open Settings to connect one.');
     }
     const now = new Date();
+    const chatPlans = readChatPlans(CHAT_PLANS_FILE());
+    chats = chats.map((chat) => {
+      const latest = (chat.messages || []).at(-1);
+      const version = String(latest?.timestamp || chat.lastActivity || latest?.key || '');
+      const userPlan = planForConversation(chatPlans, chat.id, version);
+      return userPlan ? { ...chat, userPlan } : chat;
+    });
     const rankedResult = await rankCompleteInbox(chats, now);
     const { proposed, llmUsed } = rankedResult;
     let llmNote = rankedResult.llmNote || '';
@@ -907,7 +929,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
           ? (task || it.deliverable || it.nextStep || 'Identify and complete the prerequisite, then review the draft.')
           : (it.nextStep || 'Review the unsent draft, then reply manually in WhatsApp.'))
         : (it.nextStep || (state.ballInMyCourt ? 'Review this conversation and decide whether a reply is needed.' : 'No action.'));
-      return {
+      return applyChatPlan({
         ...it, fate,
         reason: overridden ? reason : (it.reason || reason || ''),
         calibrated: overridden,
@@ -926,7 +948,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
         conversationVersion,
         // Only a conversation where they spoke last may carry a send-ready draft.
         draft: replyOwed && !needsClarification ? (it.draft || '') : '',
-      };
+      }, conv.userPlan);
     });
     const solvedChats = readSolvedChats();
     items = items.filter((item) => !solvedMatches(item, solvedChats));
@@ -1006,6 +1028,7 @@ function voiceNotesMarkdown(chatId, who) {
 
 const INBOX_CACHE_FILE = () => join(SNAPSHOT_DIR, 'inbox-latest.json');
 const SOLVED_CHATS_FILE = () => join(SNAPSHOT_DIR, 'solved-chats.json');
+const CHAT_PLANS_FILE = () => join(SNAPSHOT_DIR, 'chat-plans.json');
 
 function readSolvedChats() {
   try { return JSON.parse(readFileSync(SOLVED_CHATS_FILE(), 'utf8')); }
@@ -1048,6 +1071,23 @@ function markChatSolved(chatId, conversationVersion) {
   } catch { /* the next triage run will apply solved state */ }
 
   return { ok: true, chatId: id, conversationVersion: version };
+}
+
+function saveConversationPlan(body) {
+  const record = saveChatPlan(CHAT_PLANS_FILE(), body);
+  try {
+    const file = INBOX_CACHE_FILE();
+    const cached = JSON.parse(readFileSync(file, 'utf8'));
+    cached.items = (cached.items || []).map((item) => (
+      item.chatId === record.chatId && item.conversationVersion === record.conversationVersion
+        ? applyChatPlan(item, { ...record, stale: false })
+        : item
+    ));
+    cached.items.sort(compareTriagePriority);
+    cached.eightyTwenty = buildEightyTwenty(cached.items);
+    writeFileSync(file, JSON.stringify(cached));
+  } catch { /* a fresh triage run will apply the saved plan */ }
+  return { ok: true, plan: { ...record, stale: false } };
 }
 
 // The complete list, BEFORE any judgement: every chat and every email thread
@@ -1206,7 +1246,7 @@ async function runEverything() {
 function chatPrompt(messages, ctx) {
   const convo = messages.map((m) => `${m.role === 'user' ? 'Me' : 'You'}: ${m.content}`).join('\n');
   const context = ctx
-    ? `\nYou are helping me reply to my chat with ${ctx.who}${ctx.network ? ` (${ctx.network})` : ''}.\nRecent messages, newest last:\n${ctx.transcript || '(none loaded)'}\n`
+    ? `\nYou are helping me reply to my chat with ${ctx.who}${ctx.network ? ` (${ctx.network})` : ''}.\n${ctx.userPlan ? `My saved explanation: ${ctx.userPlan.explanation}\nMy chosen outcome: ${ctx.userPlan.outcome}${ctx.userPlan.task ? `\nTask before replying: ${ctx.userPlan.task}` : ''}\n` : ''}Recent messages, newest last:\n${ctx.transcript || '(none loaded)'}\n`
     : '';
   return `You are cleared.chat's draft assistant. You help me reply to people on my messaging apps.
 ${VOICE}
@@ -1257,6 +1297,12 @@ async function handleChat(body) {
         if (analyze) Object.assign(ctx, await fullTranscript(body.chat.id));
         else ctx.transcript = await transcriptFor(body.chat.id);
       } catch (e) { ctx.transcript = ''; }
+      const plan = planForConversation(
+        readChatPlans(CHAT_PLANS_FILE()),
+        body.chat.id,
+        body.chat.conversationVersion || '',
+      );
+      if (plan && !plan.stale) ctx.userPlan = plan;
     }
   }
   const prompt = analyze && ctx ? analyzePrompt(messages, ctx) : chatPrompt(messages, ctx);
@@ -1677,6 +1723,17 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       if (!body.chatId || !body.conversationVersion) return send(res, 400, { error: 'missing chat version' });
       return send(res, 200, markChatSolved(body.chatId, body.conversationVersion));
+    }
+    if (req.method === 'GET' && url.pathname === '/api/plan') {
+      const chatId = url.searchParams.get('chatId') || '';
+      const version = url.searchParams.get('conversationVersion') || '';
+      if (!chatId) return send(res, 400, { error: 'missing chat id' });
+      return send(res, 200, {
+        plan: planForConversation(readChatPlans(CHAT_PLANS_FILE()), chatId, version),
+      });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/plan') {
+      return send(res, 200, saveConversationPlan(await readBody(req)));
     }
     if (req.method === 'GET' && url.pathname === '/api/inbox/latest') {
       const f = INBOX_CACHE_FILE();

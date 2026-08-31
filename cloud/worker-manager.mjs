@@ -40,6 +40,10 @@ export function workerPaths(dataDir, userId) {
   };
 }
 
+export function redactWorkerLog(chunk) {
+  return String(chunk).replace(/<Buffer[^>]*>/g, '<Buffer redacted>');
+}
+
 export function workerEnvironment({ dataDir, userId, anthropicKey = '', baseEnv = process.env }) {
   const paths = workerPaths(dataDir, userId);
   const modelKey = anthropicKey || baseEnv.ANTHROPIC_API_KEY || '';
@@ -97,8 +101,8 @@ export class WorkerManager {
     const prefix = `[worker:${userId.slice(0, 8)}]`;
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => process.stdout.write(`${prefix} ${chunk}`));
-    child.stderr.on('data', (chunk) => process.stderr.write(`${prefix} ${chunk}`));
+    child.stdout.on('data', (chunk) => process.stdout.write(`${prefix} ${redactWorkerLog(chunk)}`));
+    child.stderr.on('data', (chunk) => process.stderr.write(`${prefix} ${redactWorkerLog(chunk)}`));
     child.on('exit', () => {
       const current = this.workers.get(userId);
       if (current?.child === child) this.workers.delete(userId);

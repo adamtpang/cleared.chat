@@ -139,6 +139,15 @@ media through authenticated fetches and short-lived object URLs, never a public
 WhatsApp CDN URL. A small message thumbnail is used only when the full image is
 no longer available from WhatsApp.
 
+Focus mode is the daily inbox-clearing surface. It includes every active unread
+chat plus older conversations that still look actionable. Each conversation has
+a private, versioned plan with Adam's explanation for why it is still open, an
+explicit outcome (`reply`, `task`, `waiting`, or `no-reply`), and an optional
+task that must happen first. The saved explanation is model context for later
+ranking and drafting. A newer message makes the action choice stale and requires
+review. Saving a plan never sends, marks read, archives, reacts, or clears the
+conversation; Adam still presses Cleared or confirms a reviewed reply himself.
+
 The production image includes the Faster Whisper `tiny` model under
 `/opt/cleared-whisper`, so first-use model downloads cannot interrupt voice-note
 jobs. Expired WhatsApp media gets an explicit reupload retry. A failed voice
