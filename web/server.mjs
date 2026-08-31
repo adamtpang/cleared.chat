@@ -474,8 +474,9 @@ function localHeuristicRank(chats, now = new Date()) {
     let deliverable = '';
     let draft = '';
     const latestAsk = String(state.theirLastText || '');
-    const asksForFiles = /\b(send|share|forward)\b[^.!?]{0,90}\b(photo|picture|document|file|screenshot)s?\b/i.test(latestAsk);
-    const needsHousingDecision = /\b(somewhere else|place to stay|where (?:will|can|are) you stay|do you have .*bed)\b/i.test(latestAsk);
+    const openAsk = String(state.openIncomingText || latestAsk);
+    const asksForFiles = /\b(send|share|forward)\b[^.!?]{0,90}\b(photo|picture|document|file|screenshot)s?\b/i.test(openAsk);
+    const needsHousingDecision = /\b(somewhere else|place to stay|where (?:will|can|are) you stay|do you have .*bed)\b/i.test(openAsk);
     const deadlineAsk = String(state.sharedDeadlineText || latestAsk);
     const sharedDeadline = /\b(check[ -]?out|submit|fill (?:in|out)|book|order|pay)\b/i.test(deadlineAsk)
       && /\b(today|tonight|tomorrow|tmr|by \d|by noon|by 12|asap)\b/i.test(deadlineAsk);

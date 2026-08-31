@@ -86,6 +86,7 @@ test('deriveState reads whose turn it is', () => {
   const s = deriveState(conv({ messages: [me('yo', ago(2)), them('hey', ago(1))] }), NOW);
   assert.equal(s.ballInMyCourt, true);
   assert.equal(s.counts.total, 2);
+  assert.equal(s.openIncomingText, 'hey');
 });
 
 test('a statement beginning with got is not treated as a question', () => {
