@@ -15,7 +15,7 @@ const shell = (title, body) => `<!doctype html>
 <style>
 :root{--bg:#f4f9f9;--panel:#fff;--ink:#152124;--muted:#53696d;--line:#d3e1e2;--brand:#087d86;--danger:#b42318;--radius:8px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-a{color:var(--brand);text-decoration:none}.page{min-height:100vh;display:grid;grid-template-rows:auto 1fr}.top{height:64px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:rgba(255,255,255,.9)}
+a{color:var(--brand);text-decoration:none}.page{min-height:100vh;display:grid;grid-template-rows:auto 1fr}.top{height:64px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:rgba(255,255,255,.9)}.top>a{min-width:44px;min-height:44px;display:flex;align-items:center;padding:0 8px}
 .brand{font-weight:800;color:var(--ink);display:flex;align-items:center;gap:9px}.dot{width:9px;height:9px;border-radius:50%;background:var(--brand)}
 .main{display:grid;place-items:center;padding:32px 20px}.panel{width:min(430px,100%);background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:28px;box-shadow:0 24px 60px -45px #152124}
 h1{font-size:26px;line-height:1.15;letter-spacing:0;margin:0 0 8px}p{margin:0 0 22px;color:var(--muted)}

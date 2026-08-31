@@ -473,6 +473,11 @@ function localHeuristicRank(chats, now = new Date()) {
     let minutes = 0;
     let deliverable = '';
     let draft = '';
+    const latestAsk = String(state.theirLastText || '');
+    const asksForFiles = /\b(send|share|forward)\b[^.!?]{0,90}\b(photo|picture|document|file|screenshot)s?\b/i.test(latestAsk);
+    const needsHousingDecision = /\b(somewhere else|place to stay|where (?:will|can|are) you stay|do you have .*bed)\b/i.test(latestAsk);
+    const sharedDeadline = /\b(check[ -]?out|submit|fill (?:in|out)|book|order|pay)\b/i.test(latestAsk)
+      && /\b(today|tonight|tomorrow|tmr|by \d|by noon|by 12|asap)\b/i.test(latestAsk);
 
     if (isX) {
       importance = 1; urgency = 1; proposed = FATE.LET_GO;
@@ -501,13 +506,34 @@ function localHeuristicRank(chats, now = new Date()) {
     } else if (state.isAckOnly && !state.hasQuestion) {
       proposed = FATE.LET_GO; importance = 2; urgency = 1;
       reason = 'Ack-only last message.';
+    } else if (asksForFiles) {
+      proposed = FATE.BLOCK;
+      importance = clamp(Math.round(3 + weight * 2), 3, 5);
+      urgency = 4;
+      reason = 'They need files or photos before they can continue.';
+      nextStep = 'Create and send the requested files or photos.';
+      minutes = 15; deliverable = 'Create and send the requested files or photos.';
+    } else if (needsHousingDecision) {
+      proposed = FATE.BLOCK;
+      importance = 5; urgency = 5;
+      reason = 'A housing decision is needed before replying.';
+      nextStep = 'Confirm where you will stay, then reply.';
+      minutes = 15; deliverable = 'Confirm where you will stay.';
+    } else if (sharedDeadline) {
+      proposed = FATE.BLOCK;
+      importance = 5; urgency = 5;
+      reason = 'A time-sensitive group obligation applies to you.';
+      nextStep = 'Complete or confirm the requested action before the deadline.';
+      minutes = 20; deliverable = 'Complete or confirm the group request before the deadline.';
     } else if (state.mentionsMoney) {
       proposed = FATE.BLOCK;
       importance = 5;
       urgency = clamp(3 + Math.min(2, Math.floor((state.daysSinceLast || 0) / 7)), 3, 5);
       reason = 'Money in play, ball in your court.';
-      nextStep = 'Settle or reply on payment.';
-      minutes = 15; deliverable = 'Close the money loop.';
+      nextStep = /payment link/i.test(latestAsk)
+        ? 'Verify the amount and pay the correct link.'
+        : 'Settle or reply on payment.';
+      minutes = 15; deliverable = nextStep;
     } else if (state.hasQuestion) {
       proposed = FATE.QUICK;
       importance = clamp(Math.round(2 + weight * 3), 2, 5);

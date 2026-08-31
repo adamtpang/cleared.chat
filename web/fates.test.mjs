@@ -41,6 +41,14 @@ test('group burst that names me stays actionable', () => {
   assert.equal(r.fate, FATE.QUICK, 'being named should beat the burst rule');
 });
 
+test('a shared group deadline stays actionable without naming me', () => {
+  const msgs = [me('thanks', ago(2))];
+  for (let i = 0; i < 7; i++) msgs.push(them(`chatter ${i}`, ago(1, i + 1)));
+  msgs.push(them('Everyone please check out by 12pm today unless you have an arrangement.', ago(0, 1)));
+  const r = assignFate(conv({ type: 'group', messages: msgs }), FATE.BLOCK, NOW);
+  assert.equal(r.fate, FATE.BLOCK, 'a deadline applying to everyone should beat the burst rule');
+});
+
 test('"ok cool" after a resolved thread is LET_GO, not a reply prompt', () => {
   const c = conv({ messages: [me('sent it over', ago(2)), them('ok cool', ago(1))] });
   const r = assignFate(c, FATE.QUICK, NOW);
@@ -77,6 +85,29 @@ test('deriveState reads whose turn it is', () => {
   const s = deriveState(conv({ messages: [me('yo', ago(2)), them('hey', ago(1))] }), NOW);
   assert.equal(s.ballInMyCourt, true);
   assert.equal(s.counts.total, 2);
+});
+
+test('a statement beginning with got is not treated as a question', () => {
+  const c = conv({ messages: [them('Got your new number from Kams', ago(1))] });
+  assert.equal(deriveState(c, NOW).hasQuestion, false);
+});
+
+test('old payment history does not turn a new unrelated message into a money loop', () => {
+  const c = conv({ messages: [
+    them('Here is the $50 payment link', ago(8)),
+    me('paid, thank you', ago(7)),
+    them('No lunch on Sunday.', ago(1)),
+  ] });
+  assert.equal(deriveState(c, NOW).mentionsMoney, false);
+});
+
+test('new payment after my last reply remains a money loop', () => {
+  const c = conv({ messages: [
+    them('old payment link', ago(8)),
+    me('please amend it', ago(7)),
+    them('Here is the corrected $50 payment link', ago(1)),
+  ] });
+  assert.equal(deriveState(c, NOW).mentionsMoney, true);
 });
 
 test('priority: age lifts but does not lead', () => {

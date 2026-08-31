@@ -536,21 +536,30 @@
   .mobile-chat-actions .menu button:hover{background:var(--hover)}
   .mobile-chat-actions .mobile-core-action{display:none}
   .chatbody{flex:1;min-height:0;overflow:auto;padding:var(--space-5x);display:flex;flex-direction:column;gap:var(--space-2x)}
-  .chat-brief{align-self:stretch;border:1px solid var(--line-2);background:var(--bg);border-radius:var(--r-md);padding:var(--space-3x);margin-bottom:var(--space-2x)}
+  .chat-brief{align-self:stretch;border-bottom:1px solid var(--line);padding:0 0 var(--space-4x);margin-bottom:var(--space-2x)}
   .chat-brief .brief-kicker{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--brand-light)}
   .chat-brief .brief-summary{font-size:13.5px;font-weight:650;color:var(--ink);margin-top:5px;line-height:1.45}
   .chat-brief .brief-action{font-size:12.5px;color:var(--muted-foreground);margin-top:6px;line-height:1.45}
-  .chat-brief .brief-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);gap:var(--space-3x);margin-top:var(--space-3x)}
-  .chat-brief .brief-block{border:1px solid var(--line);background:var(--surface);border-radius:var(--r-md);padding:var(--space-3x)}
-  .chat-brief .brief-label{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:7px}
+  .brief-flow{display:grid;margin-top:var(--space-3x);border-top:1px solid var(--line)}
+  .brief-step{display:grid;grid-template-columns:24px minmax(0,1fr);gap:var(--space-3x);padding:var(--space-3x) 0;border-bottom:1px solid var(--line)}
+  .brief-step:last-child{border-bottom:0;padding-bottom:0}
+  .brief-step-index{width:24px;height:24px;border:1px solid var(--line-2);border-radius:50%;display:grid;place-items:center;color:var(--faint);font-size:10px;font-weight:800;font-variant-numeric:tabular-nums}
+  .brief-step-title{font-size:12.5px;font-weight:800;color:var(--ink)}
+  .brief-step-copy{font-size:12px;color:var(--muted-foreground);line-height:1.45;margin-top:2px}
+  .brief-label{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:7px}
   .chat-brief .brief-task-list{display:grid;gap:7px;list-style:none}
   .chat-brief .brief-task{display:flex;gap:8px;font-size:13px;line-height:1.45;color:var(--ink)}
   .chat-brief .brief-task::before{content:"";width:15px;height:15px;border:1.5px solid var(--line-2);border-radius:4px;flex:none;margin-top:2px}
   .chat-brief .brief-ready{font-size:13px;color:var(--ok);font-weight:650;line-height:1.45}
   .chat-brief .brief-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-  .chat-plan{border-top:1px solid var(--line);margin-top:var(--space-3x);padding-top:var(--space-3x)}
+  .chat-plan{margin-top:8px}
   .chat-plan-title{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3x);font-size:12px;font-weight:800;color:var(--ink)}
   .chat-plan-stale{font-size:11px;font-weight:650;color:var(--warn)}
+  .plan-summary{display:flex;align-items:center;gap:8px;min-height:34px;color:var(--muted-foreground);font-size:12px}
+  .plan-summary strong{color:var(--ink);font-weight:750}
+  .plan-summary span{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .plan-summary button{margin-left:auto}
+  .plan-editor[hidden]{display:none}
   .plan-explanation,.plan-task{display:block;width:100%;margin-top:8px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface);color:var(--ink);font:500 13px/1.45 var(--font);padding:9px 10px;resize:vertical}
   .plan-explanation{min-height:68px}
   .plan-task{min-height:38px;resize:none}
@@ -602,8 +611,8 @@
 
   body.compact .chatbody{padding:var(--space-3x)}
   body.focus-mode #sidebartoggle{display:none}
-  body.focus-mode .chatbody{padding:var(--space-5x) clamp(var(--space-5x),8vw,120px)}
-  body.focus-mode .chat-brief{max-width:920px;width:100%;align-self:center;border-color:color-mix(in oklch,var(--primary) 40%,var(--line));padding:var(--space-5x)}
+  body.focus-mode .chatbody{padding:var(--space-5x) clamp(var(--space-5x),10vw,160px)}
+  body.focus-mode .chat-brief{max-width:760px;width:100%;align-self:center;padding:0 0 var(--space-4x)}
   body.focus-mode .composer{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;padding:var(--space-4x) clamp(var(--space-5x),8vw,120px)}
   body.focus-mode .composer-label{display:flex;grid-column:1/-1;align-items:baseline;justify-content:space-between;gap:var(--space-3x);font-size:12px;font-weight:800;color:var(--ink)}
   body.focus-mode .composer-label span{font-size:11px;font-weight:500;color:var(--faint)}
@@ -635,7 +644,6 @@
     body.focus-mode .focusbar{padding:9px var(--space-3x)}
     body.focus-mode .chatbody{padding:var(--space-3x)}
     body.focus-mode .composer{padding:10px var(--space-3x)}
-    .chat-brief .brief-grid{grid-template-columns:1fr}
     .plan-options{grid-template-columns:1fr 1fr}
   }
   @media (max-width:700px){.voicebar{align-items:flex-start;flex-direction:column}.voicectls{width:100%;flex-wrap:wrap}}
@@ -909,6 +917,8 @@
   let VOICE_QUEUE = [];
   let voiceActive = false;
   let voiceAutoStart = false;
+  let ACCOUNT_AI_READY = null;
+  let AI_AVAILABLE = null;
 
   // ---------- ui size / spacing (persisted) ----------
   function applyUi(){
@@ -957,12 +967,35 @@
       const response = await fetch('/api/account');
       if (!response.ok) return;
       const account = await response.json();
+      ACCOUNT_AI_READY = Boolean(account.aiReady);
+      AI_AVAILABLE = ACCOUNT_AI_READY;
+      updateAiButtons();
       const button = $('#accountbtn');
       $('#accountrow').hidden = false;
       button.title = account.email ? `Account: ${account.email}` : 'Account';
     } catch {
       // The local app has no account gateway, so this control stays hidden.
     }
+  }
+
+  function setAiAvailability(llm){
+    const name = String(llm || '');
+    const modelReady = Boolean(name) && !/local|heuristic|offline/i.test(name);
+    AI_AVAILABLE = ACCOUNT_AI_READY === true || modelReady;
+    updateAiButtons();
+  }
+
+  function updateAiButtons(){
+    const button = $('#aidraftbtn');
+    if(button) button.textContent = AI_AVAILABLE === false ? 'Connect AI' : 'Draft with AI';
+  }
+
+  function openAiSetup(){
+    if(ACCOUNT_AI_READY !== null){
+      location.href = '/account';
+      return;
+    }
+    $('#err').innerHTML = '<div class="err">AI drafting needs a connected local model. Start Cleared with LLM=cli or LLM=grok.</div>';
   }
 
   // ---------- relationship radar ----------
@@ -1433,12 +1466,9 @@
     items.forEach(it => { window.__items[it.chatId] = it; if (it.draft) it.draft = noEm(it.draft); });
 
     const action = actionQueue(items);
-    const topN = (et && et.topCount) ? et.topCount : Math.max(1, Math.ceil(action.length * 0.2));
-    const topSet = new Set(action.slice(0, topN).map(i => i.chatId));
     let html = '<div class="cleanlist">';
-    html += render8020(action, et);
-    html += folder('reply-queue', 'Reply queue', 'Unread first, then other replies you still owe.', action, {
-      defaultOpen: true, priority: true, ranked: true, topSet, rankOffset: 0
+    html += folder('reply-queue', 'Open loops', 'Work from top to bottom.', action, {
+      defaultOpen: true, priority: true, ranked: true, rankOffset: 0
     });
     html += '</div>';
     list.innerHTML = html;
@@ -2031,6 +2061,7 @@
   }
   // "Draft with AI" fills the composer. It cannot invoke the confirmed send path.
   function aiDraft(){
+    if(AI_AVAILABLE === false){ openAiSetup(); return; }
     if(!openId){ toggleAi(true); return; }
     toggleAi(true);
     sendChat('Draft a reply.');
@@ -2259,6 +2290,9 @@
     const outcome = saved && !saved.stale ? saved.outcome : inferredPlanOutcome(item);
     const explanation = saved?.explanation || '';
     const task = saved?.task || taskListFor(item)[0] || '';
+    const outcomeLabel = {
+      reply:'Reply now', task:'Task first', waiting:'Waiting on them', 'no-reply':'No reply needed',
+    }[outcome] || 'Review';
     const options = [
       ['reply', 'Reply'],
       ['task', 'Task first'],
@@ -2266,16 +2300,26 @@
       ['no-reply', 'No reply'],
     ];
     return '<div class="chat-plan" data-chat-id="'+attr(item.chatId)+'" data-outcome="'+attr(outcome)+'">'
-      + '<div class="chat-plan-title"><span>Plan this chat</span>'
-      + (saved?.stale ? '<span class="chat-plan-stale">New message arrived. Review again.</span>' : '')
+      + (saved && !saved.stale
+        ? '<div class="plan-summary"><strong>'+esc(outcomeLabel)+'</strong><span>'+esc(saved.explanation)+'</span><button class="act" onclick="togglePlanEditor(this)">Change</button></div>'
+        : '<div class="chat-plan-title"><span>Choose what closes this loop</span>'
+          + (saved?.stale ? '<span class="chat-plan-stale">New message arrived. Review again.</span>' : '')+'</div>')
+      + '<div class="plan-editor" '+(saved && !saved.stale ? 'hidden' : '')+'>'
+      +   '<textarea class="plan-explanation" placeholder="Why is this still open? What decision or context is missing?">'+esc(explanation)+'</textarea>'
+      +   '<div class="plan-options" role="group" aria-label="Choose the outcome">'
+      +   options.map(([value,label]) => '<button type="button" class="'+(outcome===value?'on':'')+'" data-plan-outcome="'+value+'" onclick="chooseChatPlan(this,'+jsq(value)+')">'+label+'</button>').join('')
+      +   '</div>'
+      +   '<textarea class="plan-task" placeholder="What must happen before you can reply?" '+(outcome==='task'?'':'hidden')+'>'+esc(task)+'</textarea>'
+      +   '<div class="plan-save-row"><button class="act primary" onclick="saveChatPlanFromBrief('+jsq(item.chatId)+',this)">Save</button><span class="plan-status"></span></div>'
       + '</div>'
-      + '<textarea class="plan-explanation" placeholder="Why is this still open? What decision or context is missing?">'+esc(explanation)+'</textarea>'
-      + '<div class="plan-options" role="group" aria-label="Choose the outcome">'
-      + options.map(([value,label]) => '<button type="button" class="'+(outcome===value?'on':'')+'" data-plan-outcome="'+value+'" onclick="chooseChatPlan(this,'+jsq(value)+')">'+label+'</button>').join('')
-      + '</div>'
-      + '<textarea class="plan-task" placeholder="What must happen before you can reply?" '+(outcome==='task'?'':'hidden')+'>'+esc(task)+'</textarea>'
-      + '<div class="plan-save-row"><button class="act primary" onclick="saveChatPlanFromBrief('+jsq(item.chatId)+',this)">Save plan</button><span class="plan-status">'+(saved && !saved.stale ? 'Saved for this conversation.' : '')+'</span></div>'
       + '</div>';
+  }
+
+  function togglePlanEditor(button){
+    const editor = button.closest('.chat-plan')?.querySelector('.plan-editor');
+    if(!editor) return;
+    editor.hidden = !editor.hidden;
+    if(!editor.hidden) editor.querySelector('.plan-explanation')?.focus();
   }
 
   function chooseChatPlan(button, outcome){
@@ -2336,6 +2380,7 @@
       setVoiceQueue(actions);
       updateFocusBar();
       status.textContent = 'Saved for this conversation. Mark Cleared when done.';
+      if(openId === chatId) await openChat(chatId);
     }catch(error){
       status.textContent = noEm(error.message || error);
     }finally{
@@ -2347,10 +2392,9 @@
     if(!triaged){
       if(!(Number(it.unread) > 0)) return '';
       return '<section class="chat-brief">'
-        + '<div class="brief-kicker">AI briefing</div>'
-        + '<div class="brief-summary">This unread chat has not been triaged yet.</div>'
-        + '<div class="brief-action">Rank the unread inbox to get the context, next action, and an editable Adam-style draft.</div>'
-        + '<div class="brief-actions"><button class="act primary" onclick="runTriage()">Triage unread inbox</button></div>'
+        + '<div class="brief-kicker">Not planned yet</div>'
+        + '<div class="brief-summary">Triage this inbox to identify the next action and prepare a draft.</div>'
+        + '<div class="brief-actions"><button class="act primary" onclick="runTriage()">Triage inbox</button></div>'
         + '</section>';
     }
     const clarification = noEm(triaged.clarifyingQuestion || '');
@@ -2358,25 +2402,29 @@
     const tasks = taskListFor(triaged);
     const taskHtml = tasks.length
       ? '<ol class="brief-task-list">'+tasks.map((task) => '<li class="brief-task">'+esc(task)+'</li>').join('')+'</ol>'
-      : '<div class="brief-ready">No task required. You can reply now.</div>';
+      : '<div class="brief-ready">Nothing to do first. You can reply now.</div>';
     const draftState = clarification
-      ? '<div class="brief-action">Answer the question below before AI writes a reply.</div>'
+      ? '<div class="brief-step-copy">Answer the missing question before generating a reply.</div>'
       : triaged.draft
-        ? '<div class="brief-ready">An editable draft is ready below.</div>'
-        : '<div class="brief-action">No draft yet. Ask AI to write one from this conversation.</div>';
+        ? '<div class="brief-ready">Your editable draft is ready.</div>'
+        : AI_AVAILABLE === false
+          ? '<div class="brief-step-copy">Connect an AI provider once to generate private, conversation-aware drafts.</div>'
+          : '<div class="brief-step-copy">Generate a reply from this conversation and your saved explanation.</div>';
+    const draftAction = triaged.draft
+      ? '<button class="act primary" onclick="useBriefDraft('+jsq(triaged.chatId)+')">Open draft</button>'
+      : AI_AVAILABLE === false
+        ? '<button class="act primary" onclick="openAiSetup()">Connect AI</button>'
+        : '<button class="act primary" onclick="draftForOpen()">'+(clarification ? 'Answer question' : 'Generate draft')+'</button>';
     return '<section class="chat-brief">'
-      + '<div class="brief-kicker">AI briefing · priority '+esc(String(triaged.score || ''))+'</div>'
+      + '<div class="brief-kicker">Priority '+esc(String(triaged.score || ''))+'</div>'
       + '<div class="brief-summary">'+esc(noEm(triaged.summary || triaged.reason || 'Review the unread messages below.'))+'</div>'
-      + planEditor(triaged)
-      + '<div class="brief-grid">'
-      +   '<div class="brief-block"><div class="brief-label">Tasks before reply</div>'+taskHtml+'</div>'
-      +   '<div class="brief-block"><div class="brief-label">Draft status</div>'+draftState+'</div>'
-      + '</div>'
-      + (next ? '<div class="brief-action"><b>Next action:</b> '+esc(next)+'</div>' : '')
-      + (clarification ? '<div class="clarify"><b>Answer before drafting</b>'+esc(clarification)+'</div>' : '')
-      + '<div class="brief-actions">'
-      +   (triaged.draft ? '<button class="act primary" onclick="useBriefDraft('+jsq(triaged.chatId)+')">Use suggested draft</button>' : '')
-      +   '<button class="act" onclick="draftForOpen()">'+(clarification ? 'Answer with AI' : 'Refine with AI')+'</button>'
+      + (next ? '<div class="brief-action"><b>Next:</b> '+esc(next)+'</div>' : '')
+      + '<div class="brief-flow">'
+      +   '<div class="brief-step"><span class="brief-step-index">1</span><div><div class="brief-step-title">Decide</div><div class="brief-step-copy">Tell Cleared why this is open and choose how it closes.</div>'+planEditor(triaged)+'</div></div>'
+      +   '<div class="brief-step"><span class="brief-step-index">2</span><div><div class="brief-step-title">Do</div>'+taskHtml+'</div></div>'
+      +   '<div class="brief-step"><span class="brief-step-index">3</span><div><div class="brief-step-title">Draft</div>'+draftState
+      +     (clarification ? '<div class="clarify"><b>Missing context</b>'+esc(clarification)+'</div>' : '')
+      +     '<div class="brief-actions">'+draftAction+'</div></div></div>'
       + '</div></section>';
   }
 
@@ -2702,6 +2750,7 @@
 
   function draftForOpen(){
     if(!openId) return;
+    if(AI_AVAILABLE === false){ openAiSetup(); return; }
     toggleAi(true);
     sendChat('Draft a reply.');
   }
@@ -2871,6 +2920,7 @@
     try{
       const data = await (await fetch('/api/inbox/latest')).json();
       if(data.error || data.empty || !(data.items||[]).length) return;
+      setAiAvailability(data.llm);
       LATEST_TRIAGE_ITEMS = (data.items || []).map(it => ({
         ...it,
         tasks: Array.isArray(it.tasks) ? it.tasks.map(noEm) : [],
@@ -3047,6 +3097,7 @@
       if(data.error) throw new Error(data.error);
       const llm = data.llm || (data.demo ? 'demo' : '');
       const localMode = /local|heuristic|offline/i.test(llm);
+      setAiAvailability(llm);
       const grokMode = /grok/i.test(llm);
       $('#flag').innerHTML = data.demo
         ? '<span class="demoflag">demo data</span>'
@@ -3178,6 +3229,7 @@
   }
   function draftFor(chatId){
     const it = window.__items[chatId]; if(!it) return;
+    if(AI_AVAILABLE === false){ openAiSetup(); return; }
     if(it.needsClarification || it.clarifyingQuestion){ clarifyFor(chatId); return; }
     setCtx({ id: chatId, who: it.who, network: it.network });
     toggleAi(true);

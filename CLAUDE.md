@@ -23,7 +23,8 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from commit `bba5c2e`.
+The hosted app at `https://app.cleared.chat` is deployed from `main`. Deployment
+receipts are recorded in `EVIDENCE.md` instead of duplicating a commit hash here.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a
@@ -147,6 +148,15 @@ task that must happen first. The saved explanation is model context for later
 ranking and drafting. A newer message makes the action choice stale and requires
 review. Saving a plan never sends, marks read, archives, reacts, or clears the
 conversation; Adam still presses Cleared or confirms a reviewed reply himself.
+
+The Focus interface is deliberately one linear sequence: `Decide`, `Do`, then
+`Draft`. The Priorities sidebar has one open-loop list, not a second summary that
+duplicates its top rows. A saved decision collapses to one line until Adam edits
+it. Task prerequisites appear before drafting. Drafting is a primary action and
+opens the separate writing workspace. Hosted AI drafting requires either the
+platform AI key or the encrypted Anthropic key saved under Account; offline
+ranking must say clearly that drafts are unavailable instead of returning a fake
+draft.
 
 The production image includes the Faster Whisper `tiny` model under
 `/opt/cleared-whisper`, so first-use model downloads cannot interrupt voice-note
