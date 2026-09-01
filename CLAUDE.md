@@ -158,6 +158,15 @@ platform AI key or the encrypted Anthropic key saved under Account; offline
 ranking must say clearly that drafts are unavailable instead of returning a fake
 draft.
 
+The local browser and desktop app expose `claude_local` and `codex_local` under
+Settings > Bring your own subscription. They use the logged-in Claude Code or
+Codex CLI account, strip API-key environment variables, disable tools, run from
+the OS temporary directory, and do not persist model sessions. The provider
+choice is private local state under the snapshot directory and takes effect
+without a restart. Hosted workers set `CLEARED_HOSTED=1` and must reject local
+subscription selection because they cannot access authentication on the user's
+computer.
+
 The production image includes the Faster Whisper `tiny` model under
 `/opt/cleared-whisper`, so first-use model downloads cannot interrupt voice-note
 jobs. Expired WhatsApp media gets an explicit reupload retry. A failed voice

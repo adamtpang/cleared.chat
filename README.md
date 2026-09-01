@@ -55,7 +55,22 @@ deployment boundary and required volume.
 
 The hosted assistant can use a platform Anthropic key or a key saved by the
 account owner. User keys are encrypted before storage and never enter the
-browser again. Without an AI key, deterministic local triage remains available.
+browser again. Local Claude and ChatGPT subscriptions cannot run in the hosted
+container. Without an AI key, deterministic offline triage remains available.
+
+## Bring your own subscription
+
+The local browser and desktop app can use either installed subscription CLI:
+
+- `claude_local` uses the account shown by `claude auth status`.
+- `codex_local` uses the ChatGPT account shown by `codex login status`.
+
+Open **Settings > Bring your own subscription** to select either provider. The
+choice is saved in private local app state and takes effect immediately. Cleared
+deletes API-key environment variables before each invocation, disables tools,
+runs from the OS temporary directory, and does not persist model sessions.
+Prompts still leave the machine for the selected model provider, so review that
+provider's privacy terms before enabling it.
 
 ## Parity boundary
 
@@ -73,7 +88,7 @@ bulk or unsolicited messaging.
 
 The Windows desktop app uses local Windows speech recognition for dictation and
 local system voices for spoken progress, so voice adds no API bill. Ranking and
-drafting use the logged-in Claude Code CLI by default.
+drafting use the selected logged-in Claude Code or Codex CLI subscription.
 
 ChatGPT subscriptions and OpenAI API billing are separate, and ChatGPT Voice
 does not currently call custom apps. OpenAI Realtime can be added later as an

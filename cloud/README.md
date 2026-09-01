@@ -41,6 +41,10 @@ message cache, snapshots, and saved AI key stay attached to the same workspace.
 The volume is mandatory. A deploy without it loses account sessions and
 WhatsApp linked-device credentials.
 
+Claude Code and Codex CLI subscriptions are intentionally unavailable in hosted
+workers. They depend on authentication stored on the user's own computer. Use
+the local browser or desktop app for bring-your-own-subscription mode.
+
 ## Security boundary
 
 - Clerk owns Google authentication and hosted session cookies.

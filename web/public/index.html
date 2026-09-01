@@ -404,6 +404,13 @@
   .setrow .lbl2{font-size:13.5px;font-weight:600;color:var(--ink)}
   .setrow .hint2{font-size:12px;color:var(--faint);margin-top:2px}
   .setrow .ctl{margin-left:auto;display:flex;gap:6px;flex:none}
+  .provider-select{max-width:190px;min-height:38px;padding:7px 30px 7px 10px;border:1px solid var(--line-2);border-radius:var(--r-md);background:var(--surface);color:var(--ink);font:600 12px var(--font);cursor:pointer}
+  .provider-select:focus{outline:2px solid var(--brand-light);outline-offset:1px}
+  .provider-select:disabled{cursor:default;opacity:.6}
+  .provider-status{font-size:11.5px;color:var(--muted-foreground);margin-top:5px;line-height:1.45}
+  .ai-provider-row{display:block}
+  .ai-provider-row .ctl{width:100%;margin:10px 0 0}
+  .ai-provider-row .provider-select{min-width:0;max-width:none;flex:1}
   .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line-2);border-radius:var(--r-md);padding:2px}
   .seg button{border:0;background:transparent;color:var(--muted-foreground);font-family:var(--font);font-size:12px;font-weight:700;
     padding:5px 12px;border-radius:var(--r-sm);cursor:pointer;transition:background 100ms var(--ease-out),color 100ms var(--ease-out)}
@@ -831,6 +838,17 @@
         <div><div class="lbl2">Account</div><div class="hint2">Manage your signed-in cleared.chat account.</div></div>
         <div class="ctl"><a class="act" id="accountbtn" href="/account" title="Account">Manage</a></div>
       </div>
+      <div class="setrow ai-provider-row" id="localairow" hidden>
+        <div>
+          <div class="lbl2">Bring your own subscription</div>
+          <div class="hint2" id="localaihint">Checking Claude and ChatGPT on this machine.</div>
+          <div class="provider-status" id="localaistatus"></div>
+        </div>
+        <div class="ctl" id="localaictl">
+          <select class="provider-select" id="localaiprovider" aria-label="AI provider" onchange="setLocalAiProvider(this.value)"></select>
+          <button class="act" id="localairefresh" onclick="loadLocalAiState(true)" title="Check local subscriptions again">Check</button>
+        </div>
+      </div>
       <div class="setrow">
         <div><div class="lbl2">Appearance</div><div class="hint2">System follows your OS setting.</div></div>
         <div class="ctl"><div class="seg" id="themeseg">
@@ -958,6 +976,7 @@
   // is cheap enough to just do.
   window.addEventListener("DOMContentLoaded", () => {
     loadAccountState();
+    loadLocalAiState();
     loadEverything().then(() => loadLatestTriage(false));
     setTimeout(refreshWhatsAppStatus, 250);
   });
@@ -978,9 +997,13 @@
     }
   }
 
+  function isOfflineAiName(llm){
+    return /^(local|heuristic|offline|partial-local-fallback)$/i.test(String(llm || ''));
+  }
+
   function setAiAvailability(llm){
     const name = String(llm || '');
-    const modelReady = Boolean(name) && !/local|heuristic|offline/i.test(name);
+    const modelReady = Boolean(name) && !isOfflineAiName(name);
     AI_AVAILABLE = ACCOUNT_AI_READY === true || modelReady;
     updateAiButtons();
   }
@@ -995,7 +1018,78 @@
       location.href = '/account';
       return;
     }
-    $('#err').innerHTML = '<div class="err">AI drafting needs a connected local model. Start Cleared with LLM=cli or LLM=grok.</div>';
+    openSettings();
+    loadLocalAiState(true);
+  }
+
+  let LOCAL_AI_STATE = null;
+  async function loadLocalAiState(force){
+    const row = $('#localairow');
+    const hint = $('#localaihint');
+    const status = $('#localaistatus');
+    const select = $('#localaiprovider');
+    const refresh = $('#localairefresh');
+    try{
+      if(refresh) refresh.disabled = true;
+      const response = await fetch('/api/ai/providers'+(force?'?refresh=1':''));
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Could not check local AI providers.');
+      LOCAL_AI_STATE = data;
+      row.hidden = false;
+      if(data.hosted){
+        hint.textContent = data.note;
+        status.textContent = 'Open the local browser or desktop app to use Claude or ChatGPT subscriptions.';
+        select.hidden = true;
+        refresh.hidden = true;
+        return;
+      }
+      select.hidden = false;
+      refresh.hidden = false;
+      const providers = data.providers || [];
+      const knownCurrent = providers.some(provider => provider.id === data.current);
+      select.innerHTML = (!knownCurrent
+        ? '<option value="'+attr(data.current)+'" disabled>Current: '+esc(data.current)+'</option>'
+        : '') + providers.map(provider =>
+        '<option value="'+attr(provider.id)+'"'+(!provider.authenticated?' disabled':'')+'>'
+        +esc(provider.label)+(provider.authenticated?'':' · '+provider.detail)+'</option>').join('');
+      select.value = data.current;
+      hint.textContent = data.note;
+      status.textContent = providers.filter(provider => provider.id !== 'local').map(provider =>
+        provider.label.replace(' subscription','')+': '+provider.detail.replace('Subscription connected','connected')).join(' · ');
+      AI_AVAILABLE = Boolean(data.ready);
+      updateAiButtons();
+    }catch(error){
+      row.hidden = false;
+      hint.textContent = 'Local subscription status is unavailable.';
+      status.textContent = String(error.message || error);
+      AI_AVAILABLE = false;
+      updateAiButtons();
+    }finally{
+      if(refresh) refresh.disabled = false;
+    }
+  }
+
+  async function setLocalAiProvider(provider){
+    const select = $('#localaiprovider');
+    const status = $('#localaistatus');
+    select.disabled = true;
+    status.textContent = 'Connecting '+select.options[select.selectedIndex].text.replace(/ · .*/, '')+'.';
+    try{
+      const response = await fetch('/api/ai/provider', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({provider})
+      });
+      const data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Could not change AI provider.');
+      LOCAL_AI_STATE = data;
+      await loadLocalAiState(true);
+    }catch(error){
+      status.textContent = String(error.message || error);
+      if(LOCAL_AI_STATE) select.value = LOCAL_AI_STATE.current;
+    }finally{
+      select.disabled = false;
+    }
   }
 
   // ---------- relationship radar ----------
@@ -1665,6 +1759,7 @@
   function openSettings(){
     applyTheme(); syncSegs(); renderSrcStatus();
     $('#waphone').value = localStorage.getItem('bc-wa-phone') || '';
+    loadLocalAiState();
     refreshWhatsAppStatus();
     $('#setmodal').classList.add('on');
   }
@@ -2898,7 +2993,7 @@
       return;
     }
     const llm = String(data?.llm || '');
-    const offline = /local|heuristic|offline/i.test(llm);
+    const offline = isOfflineAiName(llm);
     const drafts = items.filter((item) => String(item.draft || '').trim()).length;
     const taskChats = items.filter((item) => taskListFor(item).length > 0).length;
     const staleScope = data?.scope && data.scope !== 'whatsapp-triage';
@@ -3096,7 +3191,7 @@
       clearTimeout(to);
       if(data.error) throw new Error(data.error);
       const llm = data.llm || (data.demo ? 'demo' : '');
-      const localMode = /local|heuristic|offline/i.test(llm);
+      const localMode = isOfflineAiName(llm);
       setAiAvailability(llm);
       const grokMode = /grok/i.test(llm);
       $('#flag').innerHTML = data.demo
@@ -3132,7 +3227,7 @@
       showTriageOutputStatus(data, action);
       let snapHtml = '';
       if (data.note) snapHtml += '<div class="snapnote">'+esc(noEm(data.note))+'</div>';
-      if (localMode) snapHtml += '<div class="snapnote">Local ranking only (no model drafts). Paste voice yourself or switch LLM=grok.</div>';
+      if (localMode) snapHtml += '<div class="snapnote">Offline ranking only. Choose Claude subscription or ChatGPT subscription in Settings to create drafts.</div>';
       if (data.snapshot && !data.snapshot.error) {
         snapHtml += '<div class="snapnote">Snapshot '+esc(data.snapshot.when)+'. <a href="/api/snapshot" target="_blank">Open markdown</a></div>';
       }

@@ -5,8 +5,8 @@
 // A thin local proxy: the browser never sees your keys. It reads direct local
 // message sources, ranks them by importance x urgency, and runs a draft
 // assistant. Ranking and drafting use your Claude subscription by default
-// (LLM=cli, via the Claude Code CLI) so no Anthropic API credits are needed.
-// Set LLM=api to use a pay-as-you-go ANTHROPIC_API_KEY instead.
+// (LLM=claude_local, via Claude Code) so no Anthropic API credits are needed.
+// LLM=codex_local uses the ChatGPT login from Codex CLI instead.
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -42,6 +42,12 @@ import {
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
 import { buildVoiceNotesMarkdown, voiceNoteStats } from './voice-export.mjs';
 import { applyChatPlan, planForConversation, readChatPlans, saveChatPlan } from './chat-plans.mjs';
+import {
+  inspectLocalAiProviders,
+  normalizeAiProvider,
+  runClaudeLocal,
+  runCodexLocal,
+} from './local-ai.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -65,20 +71,34 @@ const BEEPER_ENABLED = process.env.BEEPER_ENABLED === '1' && Boolean(BEEPER_TOKE
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED === '1';
 // Pull WhatsApp directly through the local Baileys linked-device session.
 const WHATSAPP_DIRECT = process.env.WHATSAPP_DIRECT !== '0';
-const LLM = (process.env.LLM || 'cli').toLowerCase();
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 const API_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const CLI_MODEL = process.env.CLAUDE_MODEL || 'sonnet';
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
+const CODEX_MODEL = process.env.CODEX_MODEL || '';
+const CODEX_BIN = process.env.CODEX_BIN || 'codex';
 // grok_local = Grok Build CLI on this machine (same lane as Summon grok_local).
 const GROK_BIN = process.env.GROK_BIN || (existsSync(join(process.env.USERPROFILE || '', '.grok', 'bin', 'grok.exe'))
   ? join(process.env.USERPROFILE || '', '.grok', 'bin', 'grok.exe')
   : 'grok');
 const GROK_MODEL = process.env.GROK_MODEL || 'grok-4.5';
 const SNAPSHOT_DIR = process.env.SNAPSHOT_DIR || join(DIR, 'snapshots');
+const HOSTED_WORKER = process.env.CLEARED_HOSTED === '1';
+const LOCAL_AI_FILE = join(SNAPSHOT_DIR, 'ai-provider.json');
+const LOCAL_AI_CHOICES = new Set(['claude_local', 'codex_local', 'local']);
+const configuredLlm = normalizeAiProvider(process.env.LLM || 'claude_local');
+let LLM = configuredLlm;
+if (!HOSTED_WORKER && existsSync(LOCAL_AI_FILE)) {
+  try {
+    const saved = normalizeAiProvider(JSON.parse(readFileSync(LOCAL_AI_FILE, 'utf8')).provider);
+    if (LOCAL_AI_CHOICES.has(saved)) LLM = saved;
+  } catch { /* use the environment default */ }
+}
 const TRIAGE_CHUNK_SIZE = Math.max(4, Math.min(20, Number(process.env.TRIAGE_CHUNK_SIZE) || 12));
 const isLocalLlm = () => ['local', 'heuristic', 'offline'].includes(LLM);
 const isGrokLlm = () => ['grok', 'grok_local', 'grok-local'].includes(LLM);
+const isClaudeLocalLlm = () => LLM === 'claude_local';
+const isCodexLocalLlm = () => LLM === 'codex_local';
 
 // live progress for the UI's triage bar
 const progress = { active: false, stage: 'idle', done: 0, total: 0 };
@@ -374,27 +394,54 @@ async function searchChats(q) {
   return (r.items || []).map((c) => ({ id: c.id || c.chatID, who: c.title || c.name, network: c.network || c.accountID }));
 }
 
-// --- LLM backends (cli = Claude subscription, grok_local = Grok Build CLI, api = Anthropic paygo) ---
+// --- LLM backends (local subscriptions, Grok CLI, or Anthropic paygo) ---
+let aiProviderCache = null;
+
+async function aiProviderStatus(force = false) {
+  if (HOSTED_WORKER) {
+    return {
+      hosted: true,
+      current: LLM,
+      ready: LLM === 'api' ? Boolean(ANTHROPIC_KEY) : !isLocalLlm(),
+      providers: [],
+      note: 'Local subscriptions run only in the local browser or desktop app. Hosted Cleared uses the AI key saved under Account.',
+    };
+  }
+  if (!force && aiProviderCache && Date.now() - aiProviderCache.at < 30_000) return aiProviderCache.value;
+  const providers = await inspectLocalAiProviders({ claudeBin: CLAUDE_BIN, codexBin: CODEX_BIN });
+  const selected = providers.find((provider) => provider.id === LLM);
+  const ready = selected ? selected.authenticated : (LLM === 'api' ? Boolean(ANTHROPIC_KEY) : isGrokLlm());
+  const value = {
+    hosted: false,
+    current: LLM,
+    ready,
+    providers,
+    note: 'Uses the selected logged-in CLI on this machine. No API key is used.',
+  };
+  aiProviderCache = { at: Date.now(), value };
+  return value;
+}
+
+async function selectLocalAiProvider(value) {
+  const provider = normalizeAiProvider(value);
+  if (HOSTED_WORKER) throw new Error('Local subscriptions cannot run inside the hosted worker. Open Cleared locally or use the Account AI key.');
+  if (!LOCAL_AI_CHOICES.has(provider)) throw new Error('Choose Claude subscription, ChatGPT subscription, or Offline ranking.');
+  const status = await aiProviderStatus(true);
+  const target = status.providers.find((item) => item.id === provider);
+  if (!target?.authenticated) throw new Error(`${target?.label || provider} is not connected. Sign in through its CLI, then check again.`);
+  mkdirSync(SNAPSHOT_DIR, { recursive: true });
+  writeFileSync(LOCAL_AI_FILE, JSON.stringify({ provider }, null, 2), { mode: 0o600 });
+  LLM = provider;
+  aiProviderCache = null;
+  return aiProviderStatus(true);
+}
+
 function runClaudeCli(prompt) {
-  return new Promise((resolve, reject) => {
-    const env = { ...process.env };
-    delete env.ANTHROPIC_API_KEY; // force subscription auth, not the API
-    const child = spawn(CLAUDE_BIN, ['-p', '--output-format', 'json', '--model', CLI_MODEL], { env, cwd: tmpdir(), shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    let out = '', err = '';
-    child.stdout.on('data', (d) => (out += d));
-    child.stderr.on('data', (d) => (err += d));
-    child.on('error', (e) => reject(new Error(`Could not run "${CLAUDE_BIN}". Is Claude Code installed and logged in? ${e.message}`)));
-    child.on('close', (code) => {
-      // Claude often puts the human-readable error in stdout JSON.result, not stderr.
-      let fromJson = '';
-      try { fromJson = JSON.parse(out).result || JSON.parse(out).error || ''; } catch { /* ignore */ }
-      const detail = [fromJson, err, out].map((s) => String(s || '').trim()).find(Boolean) || '(no output)';
-      if (code !== 0) return reject(new Error(`claude exited ${code}: ${detail.slice(0, 400)}`));
-      try { resolve(JSON.parse(out).result ?? ''); } catch { reject(new Error(`Unexpected claude output: ${out.slice(0, 300)}`)); }
-    });
-    child.stdin.write(prompt);
-    child.stdin.end();
-  });
+  return runClaudeLocal(prompt, { bin: CLAUDE_BIN, model: CLI_MODEL });
+}
+
+function runCodexCli(prompt) {
+  return runCodexLocal(prompt, { bin: CODEX_BIN, model: CODEX_MODEL || undefined });
 }
 
 function runGrokCli(prompt) {
@@ -438,8 +485,10 @@ function runGrokCli(prompt) {
 async function completeText(prompt, maxTokens = 2000) {
   if (isLocalLlm()) {
     // Drafts / chat box without a model: return a short note, never 500.
-    return '(local mode: no model for free-form drafts. Set LLM=grok or wait for Claude at 4pm SGT.)';
+    return '(offline mode: no model is connected for free-form drafts. Choose Claude subscription or ChatGPT subscription in Settings.)';
   }
+  if (isClaudeLocalLlm()) return runClaudeCli(prompt);
+  if (isCodexLocalLlm()) return runCodexCli(prompt);
   if (isGrokLlm()) return runGrokCli(prompt);
   if (LLM === 'api') {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -451,7 +500,7 @@ async function completeText(prompt, maxTokens = 2000) {
     const data = await r.json();
     return (data.content || []).map((b) => b.text || '').join('');
   }
-  return runClaudeCli(prompt);
+  throw new Error(`Unknown AI provider: ${LLM}`);
 }
 
 // Local ranking when Claude CLI is rate-limited and API has no credits.
@@ -852,7 +901,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
   progress.active = true; progress.stage = 'starting'; progress.done = 0; progress.total = 0;
   try {
     if (DEMO) return { demo: true, items: SAMPLE, snapshot: trySnapshot(SAMPLE) };
-    if (LLM === 'api' && !ANTHROPIC_KEY) throw new Error('LLM=api needs ANTHROPIC_API_KEY (or use LLM=cli / LLM=grok / LLM=local).');
+    if (LLM === 'api' && !ANTHROPIC_KEY) throw new Error('LLM=api needs ANTHROPIC_API_KEY. For subscription access, choose Claude subscription or ChatGPT subscription in local Settings.');
     progress.stage = 'fetching chat list';
     const [beeperChats, gmail] = await Promise.all([
       BEEPER_ENABLED ? fetchInbox().catch((e) => { console.error('[beeper]', e.message || e); return []; }) : Promise.resolve([]),
@@ -1728,6 +1777,17 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
       return send(res, 200, await readFile(join(DIR, 'public', 'index.html'), 'utf8'), 'text/html');
     }
+    if (req.method === 'GET' && url.pathname === '/api/ai/providers') {
+      return send(res, 200, await aiProviderStatus(url.searchParams.get('refresh') === '1'));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/ai/provider') {
+      try {
+        const body = await readBody(req);
+        return send(res, 200, await selectLocalAiProvider(body.provider));
+      } catch (error) {
+        return send(res, HOSTED_WORKER ? 403 : 400, { error: String(error.message || error) });
+      }
+    }
     if (req.method === 'GET' && url.pathname === '/api/inbox') {
       const requestedScope = url.searchParams.get('scope') || 'all';
       const scope = ['all', 'unread', 'whatsapp-unread', 'whatsapp-open', 'whatsapp-triage'].includes(requestedScope) ? requestedScope : 'all';
@@ -1972,9 +2032,11 @@ server.listen(PORT, () => {
   if (!DEMO) {
     const sources = BEEPER_ENABLED ? 'direct WhatsApp + legacy adapter' : 'direct WhatsApp';
     if (isLocalLlm()) mode = `LIVE: ${sources} + local ranking`;
+    else if (isClaudeLocalLlm()) mode = `LIVE: ${sources} + Claude subscription (${CLI_MODEL})`;
+    else if (isCodexLocalLlm()) mode = `LIVE: ${sources} + ChatGPT subscription${CODEX_MODEL ? ` (${CODEX_MODEL})` : ''}`;
     else if (isGrokLlm()) mode = `LIVE: ${sources} + Grok CLI (${GROK_MODEL} / grok_local)`;
     else if (LLM === 'api') mode = `LIVE: ${sources} + Claude API key`;
-    else mode = `LIVE: ${sources} + Claude CLI subscription`;
+    else mode = `LIVE: ${sources} + ${LLM}`;
   }
   console.log(`cleared.chat web  ->  http://localhost:${PORT}   [${mode}]`);
 
