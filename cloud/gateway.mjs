@@ -309,13 +309,20 @@ export function createGateway(options = {}) {
       const user = clerkConfigured ? clerkIdentity.user : accounts.userForSession(sessionToken);
 
       if (req.method === 'GET' && url.pathname === '/') {
-        return user ? redirect(res, '/app') : redirect(res, '/login');
+        if (!user) return redirect(res, '/login');
+        const html = hostedAppHtml(readFileSync(WEB_APP, 'utf8'), clerkConfigured
+          ? { publishableKey: clerkPublishableKey, frontendApi: clerkFrontendApi }
+          : {});
+        return send(res, 200, html, 'text/html; charset=utf-8', appHeaders(clerkFrontendApi));
+      }
+      if (req.method === 'GET' && ['/app', '/app/'].includes(url.pathname)) {
+        return redirect(res, '/');
       }
       if (req.method === 'GET' && url.pathname === '/signup' && clerkConfigured) {
         return redirect(res, '/login');
       }
       if (req.method === 'GET' && ['/login', '/signup', '/sso-callback'].includes(url.pathname)) {
-        if (user) return redirect(res, '/app');
+        if (user) return redirect(res, '/');
         if (url.pathname === '/sso-callback' && !clerkConfigured) return redirect(res, '/login');
         const error = url.searchParams.get('error') || '';
         const page = clerkConfigured
@@ -346,7 +353,7 @@ export function createGateway(options = {}) {
           return send(res, 400, authPage({ mode: url.pathname.slice(1), error: error.message }), 'text/html; charset=utf-8', appHeaders());
         }
         const session = accounts.createSession(nextUser.id);
-        return redirect(res, '/app', { 'Set-Cookie': cookieHeader(session.token, session.maxAge, secureCookies) });
+        return redirect(res, '/', { 'Set-Cookie': cookieHeader(session.token, session.maxAge, secureCookies) });
       }
       if (req.method === 'POST' && url.pathname === '/logout') {
         if (!sameOrigin(req)) return send(res, 403, 'Forbidden', 'text/plain; charset=utf-8');
@@ -388,12 +395,6 @@ export function createGateway(options = {}) {
       }
       if (req.method === 'GET' && url.pathname === '/api/account') {
         return send(res, 200, JSON.stringify({ email: user.email, aiReady: platformAi || accounts.hasSecret(user.id, 'anthropic_api_key') }), 'application/json; charset=utf-8');
-      }
-      if (req.method === 'GET' && ['/app', '/app/'].includes(url.pathname)) {
-        const html = hostedAppHtml(readFileSync(WEB_APP, 'utf8'), clerkConfigured
-          ? { publishableKey: clerkPublishableKey, frontendApi: clerkFrontendApi }
-          : {});
-        return send(res, 200, html, 'text/html; charset=utf-8', appHeaders(clerkFrontendApi));
       }
       if (url.pathname.startsWith('/api/')) {
         const worker = await workers.get(user.id);

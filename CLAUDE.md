@@ -30,6 +30,9 @@ container mounts `/var/lib/cleared-chat` at `/data` and binds only to
 live, preserve the previous container as a rollback target, and never run two
 containers against the same `/data` volume. Deployment receipts are recorded
 in `EVIDENCE.md` instead of duplicating a commit hash here.
+The bare origin is the canonical inbox URL. Authenticated requests to `/` serve
+the app, signed-out requests go to `/login`, and legacy `/app` links redirect
+to `/`.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a

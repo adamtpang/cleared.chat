@@ -67,6 +67,10 @@ test('signup creates a browser session and opens the private app', async (t) => 
   assert.equal(login.status, 200);
   assert.match(await login.text(), /Welcome back/);
 
+  const anonymousRoot = await fetch(`${base}/`, { redirect: 'manual' });
+  assert.equal(anonymousRoot.status, 303);
+  assert.equal(anonymousRoot.headers.get('location'), '/login');
+
   const signup = await fetch(`${base}/signup`, {
     method: 'POST',
     redirect: 'manual',
@@ -74,12 +78,16 @@ test('signup creates a browser session and opens the private app', async (t) => 
     body: new URLSearchParams({ email: 'member@example.com', password: 'a-secure-test-password' }),
   });
   assert.equal(signup.status, 303);
-  assert.equal(signup.headers.get('location'), '/app');
+  assert.equal(signup.headers.get('location'), '/');
   const cookie = signup.headers.get('set-cookie').split(';')[0];
 
-  const app = await fetch(`${base}/app`, { headers: { cookie } });
+  const app = await fetch(`${base}/`, { headers: { cookie } });
   assert.equal(app.status, 200);
   assert.match(await app.text(), /id="accountbtn"/);
+
+  const legacyApp = await fetch(`${base}/app`, { headers: { cookie }, redirect: 'manual' });
+  assert.equal(legacyApp.status, 303);
+  assert.equal(legacyApp.headers.get('location'), '/');
 
   const account = await fetch(`${base}/api/account`, { headers: { cookie } });
   assert.deepEqual(await account.json(), { email: 'member@example.com', aiReady: false });
@@ -137,7 +145,7 @@ test('Clerk Google login reuses an existing account and protects anonymous reque
   const clerkClient = {
     async authenticateRequest(request) {
       if (request.headers.get('x-test-clerk-handshake')) {
-        const headers = new Headers({ location: '/app' });
+        const headers = new Headers({ location: '/' });
         headers.append('set-cookie', '__session=test-session; Path=/; HttpOnly');
         headers.append('set-cookie', '__refresh=test-refresh; Path=/; HttpOnly');
         return { isAuthenticated: false, status: 'handshake', headers };
@@ -206,7 +214,7 @@ test('Clerk Google login reuses an existing account and protects anonymous reque
   const anonymous = await fetch(`${base}/api/account`);
   assert.equal(anonymous.status, 401);
 
-  const handshake = await fetch(`${base}/app`, {
+  const handshake = await fetch(`${base}/`, {
     redirect: 'manual',
     headers: { 'x-test-clerk-handshake': '1' },
   });
@@ -224,7 +232,7 @@ test('Clerk Google login reuses an existing account and protects anonymous reque
   assert.equal(gateway.accounts.userForClerkId('user_google_owner').id, original.id);
   assert.equal(gateway.accounts.listUserIds().length, 1);
 
-  const app = await fetch(`${base}/app`, {
+  const app = await fetch(`${base}/`, {
     headers: { authorization: 'Bearer fresh-browser-token' },
   });
   assert.equal(app.status, 200);

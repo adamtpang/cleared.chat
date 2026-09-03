@@ -42,7 +42,7 @@ export function authPage({ mode = 'login', error = '' } = {}) {
       <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" minlength="10" required></div>
       <button class="primary" type="submit">${signup ? 'Create account' : 'Sign in'}</button>
     </form>
-    <div class="fine">Your WhatsApp credentials and messages are isolated from every other account. cleared.chat never sends messages.</div>
+    <div class="fine">Your WhatsApp credentials and messages are isolated from every other account. Nothing sends without your confirmation.</div>
   </section></main>`);
 }
 
@@ -56,7 +56,7 @@ export function clerkAuthPage({ publishableKey, frontendApi, error = '', callbac
       ${callback ? '<div class="loader"><span class="spinner"></span><span>Finishing secure sign in</span></div>' : '<button id="google-signin" class="google-button" type="button" disabled><span class="google-mark">G</span><span>Continue with Google</span></button>'}
       <div id="clerk-status" class="auth-status">${callback ? '' : 'Preparing secure sign in'}</div>
     </div>
-    <div class="fine">Your WhatsApp credentials and messages are isolated from every other account. cleared.chat never sends messages.</div>
+    <div class="fine">Your WhatsApp credentials and messages are isolated from every other account. Nothing sends without your confirmation.</div>
   </section></main>
   <script defer crossorigin="anonymous" data-clerk-publishable-key="${esc(publishableKey)}" src="${esc(frontendApi)}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>
   <script>
@@ -66,15 +66,15 @@ export function clerkAuthPage({ publishableKey, frontendApi, error = '', callbac
       try {
         await Clerk.load();
         if (Clerk.isSignedIn) {
-          location.replace('/app');
+          location.replace('/');
           return;
         }
         if (${callback ? 'true' : 'false'}) {
           await Clerk.handleRedirectCallback({
             signInUrl: '/login',
             signUpUrl: '/login',
-            signInFallbackRedirectUrl: '/app',
-            signUpFallbackRedirectUrl: '/app'
+            signInFallbackRedirectUrl: '/',
+            signUpFallbackRedirectUrl: '/'
           });
           return;
         }
@@ -88,7 +88,7 @@ export function clerkAuthPage({ publishableKey, frontendApi, error = '', callbac
             await Clerk.client.signIn.authenticateWithRedirect({
               strategy: 'oauth_google',
               redirectUrl: '/sso-callback',
-              redirectUrlComplete: '/app'
+              redirectUrlComplete: '/'
             });
           } catch (error) {
             button.disabled = false;
@@ -107,7 +107,7 @@ export function clerkAuthPage({ publishableKey, frontendApi, error = '', callbac
 export function accountPage({ user, hasUserKey, hasPlatformKey, message = '', error = '' }) {
   const aiReady = hasUserKey || hasPlatformKey;
   return shell('Account', `
-  <header class="top"><a class="brand" href="/app"><span class="dot"></span>cleared.chat</a><div class="nav"><a href="/app">Inbox</a><form method="post" action="/logout"><button type="submit">Sign out</button></form></div></header>
+  <header class="top"><a class="brand" href="/"><span class="dot"></span>cleared.chat</a><div class="nav"><a href="/">Inbox</a><form method="post" action="/logout"><button type="submit">Sign out</button></form></div></header>
   <main class="main"><section class="panel account">
     <div><h1>Account</h1><p>${esc(user.email)}</p></div>
     ${message ? `<div class="status"><i></i>${esc(message)}</div>` : ''}
@@ -118,6 +118,6 @@ export function accountPage({ user, hasUserKey, hasPlatformKey, message = '', er
       ${hasPlatformKey ? '' : `<form method="post" action="/account/ai-key"><div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" name="apiKey" type="password" autocomplete="off" placeholder="sk-ant-..."></div><button class="primary" type="submit">${hasUserKey ? 'Replace key' : 'Save key'}</button></form>`}
       ${hasUserKey ? `<form method="post" action="/account/ai-key/delete" style="margin-top:10px"><button class="ghost" type="submit">Remove saved key</button></form>` : ''}
     </div>
-    <div class="row"><p>WhatsApp pairing and connection status are managed inside Inbox Settings.</p><div class="actions"><a class="primary" style="display:inline-block;padding:11px 16px;border-radius:6px;background:var(--brand);color:#fff;font-weight:800" href="/app">Open inbox</a></div></div>
+    <div class="row"><p>WhatsApp pairing and connection status are managed inside Inbox Settings.</p><div class="actions"><a class="primary" style="display:inline-block;padding:11px 16px;border-radius:6px;background:var(--brand);color:#fff;font-weight:800" href="/">Open inbox</a></div></div>
   </section></main>`);
 }
