@@ -16,16 +16,24 @@ provides:
     at: web/server.mjs
   - id: voice-rules
     what: draft voice rules (no em dashes, no emojis, never needy, never AI-sounding) referenced by sprite.email's own draft work
-    at: me.md
+    at: web/server.mjs
 
 stack: [node, vanilla-js, electron]
 
 kin:
   - repo: sprite.email
     why: same triage pipeline shape (score and draft, with the human always sending manually) for a different inbox. Messaging is here, Gmail is there. sprite.email already documents this bridge in its own SIBLING_BEEPER_CHAT.md; this is the reciprocal edge. sprite.email has the stronger multi-account source layer, cleared.chat has the stronger scoring/drafting/Rule-0 layer. Converging means each adopts the other's strong half, per the shared TriageCore contract sketched in that doc.
-  - repo: pokedex.life
-    why: cleared.chat can read real-world physical-presence signals from active local community conversations that pokedex.life's Farcaster-only Specimen model has no equivalent source for. Useful for its tend layer, not just its read layer.
   - repo: deathmoney.fyi
     why: cleared.chat surfaces payment conversations and people-context, while deathmoney.fyi is the private money ledger and verification workflow. Messages can identify a payment loop, but deathmoney.fyi is the source of truth before any amount is treated as owed or sent.
+
+exchanges:
+  - id: port-triage-rule
+    with: sprite.email
+    trigger: contract-drift
+    asks: inspect a changed messaging triage rule against the Gmail implementation
+    returns: bounded parity patch proposal with tests and human-send boundary intact
+    permission: propose-change
+    approval: human-required
+    at: docs/scoring.md
 
 canon: none - SIBLING_BEEPER_CHAT.md lives in sprite.email as the bridge doc; this repo links back to it rather than duplicating it
