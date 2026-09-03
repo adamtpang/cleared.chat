@@ -195,7 +195,10 @@ editor is collapsed disclosure until Adam opens it, while the current next
 action remains visible. Task prerequisites appear before the one reply composer.
 Hosted AI drafting requires either the platform AI key or the encrypted
 Anthropic key saved under Account; offline ranking must say clearly that drafts
-are unavailable instead of returning a fake draft.
+are unavailable instead of returning a fake draft. Thread questions, composer
+questions, and cross-chat asks without a connected model return an explicit
+error, never a notice dressed as an answer. The hosted notice points at
+Account; the local notice points at Settings > Bring your own subscription.
 
 The local browser and desktop app expose `claude_local` and `codex_local` under
 Settings > Bring your own subscription. They use the logged-in Claude Code or

@@ -17,6 +17,16 @@ export const LOCAL_AI_PROVIDERS = Object.freeze([
   { id: 'local', label: 'Offline ranking' },
 ]);
 
+// One honest sentence for every free-form model call when no model is
+// connected. Hosted workers cannot use the subscriptions on Adam's computer,
+// so they must point at the Account page instead of Settings.
+export function offlineModelNotice({ hosted = false } = {}) {
+  if (hosted) {
+    return 'No AI model is connected to this account. Add your Anthropic API key under Account, then try again.';
+  }
+  return 'No AI model is connected. Choose Claude subscription or ChatGPT subscription under Settings > Bring your own subscription, then try again.';
+}
+
 export function normalizeAiProvider(value) {
   const id = String(value || '').trim().toLowerCase().replaceAll('-', '_');
   if (['cli', 'claude', 'claude_cli', 'claude_local'].includes(id)) return 'claude_local';

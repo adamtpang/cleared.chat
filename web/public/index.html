@@ -3867,6 +3867,7 @@
     const inp = $('#min');
     const text = (preset !== undefined ? preset : inp.value).trim();
     if(!text || !tctx) return;
+    if(AI_AVAILABLE === false){ openAiSetup(); return; }
     if(preset === undefined) inp.value='';
     tmsgs.push({role:'user', content:text});
     renderTMsgs(true);

@@ -46,6 +46,7 @@ import { applyChatPlan, planForConversation, readChatPlans, saveChatPlan } from 
 import {
   inspectLocalAiProviders,
   normalizeAiProvider,
+  offlineModelNotice,
   runClaudeLocal,
   runCodexLocal,
 } from './local-ai.mjs';
@@ -485,7 +486,7 @@ function runGrokCli(prompt) {
 async function completeText(prompt, maxTokens = 2000) {
   if (isLocalLlm()) {
     // Drafts / chat box without a model: return a short note, never 500.
-    return '(offline mode: no model is connected for free-form drafts. Choose Claude subscription or ChatGPT subscription in Settings.)';
+    return `(${offlineModelNotice({ hosted: HOSTED_WORKER })})`;
   }
   if (isClaudeLocalLlm()) return runClaudeCli(prompt);
   if (isCodexLocalLlm()) return runCodexCli(prompt);
@@ -1365,6 +1366,9 @@ You:`;
 }
 
 async function handleChat(body) {
+  // No connected model means no answer. Say so as an error so the UI can open
+  // AI setup instead of rendering the notice as if the thread had been read.
+  if (isLocalLlm()) return { error: offlineModelNotice({ hosted: HOSTED_WORKER }) };
   const messages = Array.isArray(body.messages) ? body.messages.slice(-20) : [];
   const analyze = body.mode === 'analyze';
   let ctx = null;
@@ -1620,6 +1624,7 @@ Answer directly and concisely using ONLY the messages above. Cite inline like (c
 async function handleAsk(body) {
   const question = String(body.question || '').trim();
   if (!question) return { error: 'Ask a question first.' };
+  if (isLocalLlm()) return { error: offlineModelNotice({ hosted: HOSTED_WORKER }) };
   if (DEMO || (!BEEPER_ENABLED && !WHATSAPP_DIRECT)) {
     return { answer: 'Connect at least one read-only message source first.', sources: [] };
   }

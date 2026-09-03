@@ -6,6 +6,7 @@ import { writeFileSync } from 'node:fs';
 import {
   inspectLocalAiProviders,
   normalizeAiProvider,
+  offlineModelNotice,
   runClaudeLocal,
   runCodexLocal,
 } from './local-ai.mjs';
@@ -96,4 +97,14 @@ test('provider inspection reports authenticated local subscriptions without expo
   ]);
   assert.equal(providers[0].executable, providers[1].executable);
   assert.doesNotMatch(providers[0].executable, /[\\/]/);
+});
+
+test('offline notice points hosted accounts at Account and local apps at Settings', () => {
+  const hosted = offlineModelNotice({ hosted: true });
+  const local = offlineModelNotice({ hosted: false });
+  assert.match(hosted, /Anthropic API key under Account/);
+  assert.doesNotMatch(hosted, /subscription/i);
+  assert.match(local, /Settings > Bring your own subscription/);
+  assert.doesNotMatch(local, /Account/);
+  for (const text of [hosted, local]) assert.doesNotMatch(text, /\u2014/);
 });
