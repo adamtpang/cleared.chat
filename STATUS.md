@@ -25,7 +25,7 @@ Cleared is the private AI inbox for relationship-heavy people: it finds every im
 
 ## Current truth
 
-The canonical company is `cleared.chat`. A legacy local folder named `beeper.chat` points to the same GitHub remote and held richer evidence until 2026-09-03, when the canonical `cleared.chat` clone was fetched and rebased to the same origin/main tip. The hosted product is documented with Google sign-in, isolated WhatsApp workers, direct sync, open-loop detection, local transcription, triage, and editable drafts. Offer and revenue evidence remain blank.
+The canonical company is `cleared.chat`. A legacy local checkout still sitting in a folder carrying the old `beeper.chat` name points to the same GitHub remote and held richer evidence until 2026-09-03, when the canonical `cleared.chat` clone was fetched and rebased to the same origin/main tip. The hosted product is documented with Google sign-in, isolated WhatsApp workers, direct sync, open-loop detection, local transcription, triage, and editable drafts. Offer and revenue evidence remain blank.
 
 ### Verified evidence
 
@@ -116,7 +116,7 @@ External messages, publication, deployment, spending, contracts, payment changes
 - `OFFER.md`
 - `README.md`
 - `CLAUDE.md`
-- legacy-folder evidence at `../beeper.chat` until canonical reconciliation
+- legacy-folder evidence is reconciled into this canonical folder as of 2026-09-03; the old `beeper.chat` folder name is pre-rebrand and holds only uncommitted edits
 
 ## Update contract
 

@@ -298,4 +298,4 @@ again from Settings.
 
 Sibling product `../sprite.email` applies the same importance and urgency model
 to Gmail. Its historical bridge document remains at
-`../sprite.email/SIBLING_BEEPER_CHAT.md`.
+`../sprite.email/SIBLING_CLEARED_CHAT.md`.

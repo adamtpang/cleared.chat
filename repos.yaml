@@ -22,7 +22,7 @@ stack: [node, vanilla-js, electron]
 
 kin:
   - repo: sprite.email
-    why: same triage pipeline shape (score and draft, with the human always sending manually) for a different inbox. Messaging is here, Gmail is there. sprite.email already documents this bridge in its own SIBLING_BEEPER_CHAT.md; this is the reciprocal edge. sprite.email has the stronger multi-account source layer, cleared.chat has the stronger scoring/drafting/Rule-0 layer. Converging means each adopts the other's strong half, per the shared TriageCore contract sketched in that doc.
+    why: same triage pipeline shape (score and draft, with the human always sending manually) for a different inbox. Messaging is here, Gmail is there. sprite.email already documents this bridge in its own SIBLING_CLEARED_CHAT.md; this is the reciprocal edge. sprite.email has the stronger multi-account source layer, cleared.chat has the stronger scoring/drafting/Rule-0 layer. Converging means each adopts the other's strong half, per the shared TriageCore contract sketched in that doc.
   - repo: deathmoney.fyi
     why: cleared.chat surfaces payment conversations and people-context, while deathmoney.fyi is the private money ledger and verification workflow. Messages can identify a payment loop, but deathmoney.fyi is the source of truth before any amount is treated as owed or sent.
 
@@ -36,4 +36,4 @@ exchanges:
     approval: human-required
     at: docs/scoring.md
 
-canon: none - SIBLING_BEEPER_CHAT.md lives in sprite.email as the bridge doc; this repo links back to it rather than duplicating it
+canon: none - SIBLING_CLEARED_CHAT.md lives in sprite.email as the bridge doc; this repo links back to it rather than duplicating it
