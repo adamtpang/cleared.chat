@@ -7,6 +7,7 @@ import {
   canonicalWhatsAppJid,
   getMessageImage,
   imageInfoForDisplay,
+  isProfilePhotoCacheFresh,
   isWhatsAppChatId,
   isVisibleStoredMessage,
   messageTextForDisplay,
@@ -230,6 +231,19 @@ test('WhatsApp contact photo changes invalidate the cached image', () => {
   assert.equal(patch.title, 'Teammate');
   assert.equal(patch.imgUrl, '');
   assert.equal(patch.profilePhotoCheckedAt, null);
+});
+
+test('WhatsApp profile photo misses are retried after the cache window', () => {
+  const now = Date.parse('2026-09-03T12:00:00.000Z');
+  assert.equal(isProfilePhotoCacheFresh({
+    imgUrl: null,
+    profilePhotoCheckedAt: '2026-09-03T11:00:00.000Z',
+  }, now), true);
+  assert.equal(isProfilePhotoCacheFresh({
+    imgUrl: null,
+    profilePhotoCheckedAt: '2026-09-03T05:00:00.000Z',
+  }, now), false);
+  assert.equal(isProfilePhotoCacheFresh({ imgUrl: '' }, now), false);
 });
 
 test('WhatsApp LID identities resolve to the phone-number thread', () => {

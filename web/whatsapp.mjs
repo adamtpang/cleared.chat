@@ -1562,6 +1562,12 @@ export async function getMessageImage({ chatId, messageId } = {}) {
 const profilePhotoRequests = new Map();
 const profilePhotoQueue = [];
 let activeProfilePhotoRequests = 0;
+const PROFILE_PHOTO_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+export function isProfilePhotoCacheFresh(chat = {}, now = Date.now()) {
+  const checkedAt = new Date(chat.profilePhotoCheckedAt || 0).getTime();
+  return Number.isFinite(checkedAt) && checkedAt > 0 && now - checkedAt < PROFILE_PHOTO_MAX_AGE_MS;
+}
 
 function limitedProfilePhotoRequest(run) {
   return new Promise((resolve, reject) => {
@@ -1585,8 +1591,10 @@ export async function getProfilePhoto(chatId) {
   const jid = canonicalWhatsAppJid(whatsappJid(chatId));
   if (!jid) return null;
   const cached = chatsById.get(jid);
-  if (/^https?:\/\//i.test(String(cached?.imgUrl || ''))) return cached.imgUrl;
-  if (cached && cached.imgUrl === null) return null;
+  if (isProfilePhotoCacheFresh(cached)) {
+    if (/^https?:\/\//i.test(String(cached?.imgUrl || ''))) return cached.imgUrl;
+    if (cached?.imgUrl === null) return null;
+  }
   if (profilePhotoRequests.has(jid)) return profilePhotoRequests.get(jid);
 
   const request = limitedProfilePhotoRequest(async () => {
@@ -1608,6 +1616,20 @@ export async function getProfilePhoto(chatId) {
   }).finally(() => profilePhotoRequests.delete(jid));
   profilePhotoRequests.set(jid, request);
   return request;
+}
+
+export async function hydrateProfilePhotos({ limit = 48 } = {}) {
+  if (!chatsById.size) loadStore();
+  if (!sock || status !== 'open') return { checked: 0, found: 0 };
+  const candidates = [...chatsById.values()]
+    .filter((chat) => chat.lastActivity && !chat.isArchived && !isProfilePhotoCacheFresh(chat))
+    .sort((a, b) => {
+      const unread = Number(b.unreadCount || 0) - Number(a.unreadCount || 0);
+      return unread || new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0);
+    })
+    .slice(0, Math.max(0, limit));
+  const photos = await Promise.all(candidates.map((chat) => getProfilePhoto(toWhatsAppSourceId(chat.id))));
+  return { checked: candidates.length, found: photos.filter(Boolean).length };
 }
 
 export async function hydrateGroupNames({ limit = 30 } = {}) {
@@ -1764,6 +1786,7 @@ function startSocket({ state, saveCreds }, opts) {
       setConnectionStatus('open', 'Linked successfully. WhatsApp is now syncing your message history.');
       latestQr = null;
       console.log('\n[whatsapp] paired and connected.\n');
+      void hydrateProfilePhotos().catch(() => {});
       onOpen?.();
     }
 

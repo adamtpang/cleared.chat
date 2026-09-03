@@ -153,6 +153,13 @@ as numbers only because companion sync does not include the phone address book.
 The UI offers `Name contact` for those chats. Aliases are private per-account
 state in `contact-aliases.json` and must remain outside git and image builds.
 
+WhatsApp profile photos use the authenticated `/api/wa/avatar` path. The hosted
+gateway resolves its WhatsApp CDN redirect before streaming the image. Visible
+avatars retry while the saved session finishes connecting, and recent unread
+chats are hydrated in the background after the socket opens. Missing and
+expired lookups are retried after six hours. Initials remain the fallback when
+WhatsApp privacy settings expose no photo.
+
 Unread chat rows follow WhatsApp's visual hierarchy: bold contact and preview,
 primary-color time, then a circular message-count badge. Received WhatsApp
 voice notes are transcribed locally as they arrive. A conversation with stored

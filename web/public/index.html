@@ -1398,12 +1398,24 @@
     const url = String(value || '');
     return /^https?:\/\//i.test(url) || url.startsWith('/api/wa/avatar?') ? url : '';
   }
+  function retryAvatar(image){
+    const attempt = Number(image.dataset.avatarAttempt || 0) + 1;
+    if(attempt > 4){ image.remove(); return; }
+    image.dataset.avatarAttempt = String(attempt);
+    const delay = [2500, 5000, 10000, 20000][attempt - 1];
+    setTimeout(()=>{
+      if(!image.isConnected) return;
+      const next = new URL(image.getAttribute('src'), location.href);
+      next.searchParams.set('retry', String(Date.now()));
+      image.src = next.href;
+    }, delay);
+  }
   function avatarMarkup(item){
     const who = item && item.who ? item.who : '?';
     const url = safeAvatarUrl(item && item.avatarUrl);
     return '<span class="avatar" style="'+avatarStyle(who)+'" aria-hidden="true">'
       + '<span class="avatar-fallback">'+esc(avatarInitial(who))+'</span>'
-      + (url ? '<img src="'+attr(url)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : '')
+      + (url ? '<img src="'+attr(url)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="retryAvatar(this)">' : '')
       + '</span>';
   }
   function setAvatar(element, item){
@@ -1412,7 +1424,7 @@
     const url = safeAvatarUrl(item && item.avatarUrl);
     element.setAttribute('style', avatarStyle(who));
     element.innerHTML = '<span class="avatar-fallback">'+esc(avatarInitial(who))+'</span>'
-      + (url ? '<img src="'+attr(url)+'" alt="" referrerpolicy="no-referrer" onerror="this.remove()">' : '');
+      + (url ? '<img src="'+attr(url)+'" alt="" referrerpolicy="no-referrer" onerror="retryAvatar(this)">' : '');
   }
   let openDetailId = null;
   let foldState = JSON.parse(localStorage.getItem('bc-folds') || '{}');

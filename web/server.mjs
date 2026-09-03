@@ -277,12 +277,11 @@ async function fetchConversations({ inbox = 'primary', limit = 60, msgs = 15, st
 const fetchInbox = fetchConversations;
 
 function avatarUrlFor(conversation) {
-  const direct = conversation?.imgUrl || conversation?.imgURL || conversation?.avatarUrl || null;
-  if (direct) return direct;
   if (conversation?.source === 'whatsapp-direct' || isWhatsAppChatId(conversation?.id)) {
-    return `/api/wa/avatar?id=${encodeURIComponent(conversation.id)}`;
+    const version = conversation?.profilePhotoCheckedAt || conversation?.lastActivity || '';
+    return `/api/wa/avatar?id=${encodeURIComponent(conversation.id)}&v=${encodeURIComponent(version)}`;
   }
-  return null;
+  return conversation?.imgUrl || conversation?.imgURL || conversation?.avatarUrl || null;
 }
 
 async function transcriptFor(chatId, limit = 40) {
