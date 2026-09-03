@@ -16,6 +16,7 @@ import {
   normalizeContactPatch,
   registerLidMappings,
   toWhatsAppSourceId,
+  validateOutboundForward,
   validateOutboundReaction,
   validateOutboundText,
   validateVoiceRetryRequest,
@@ -78,6 +79,41 @@ test('outbound reactions require one emoji and a confirmed synced message', () =
     chatId: 'wa:60123456789@s.whatsapp.net',
     messageId: '3EB0123456789ABCDE',
     emoji: '👍',
+  }), /confirmation request/);
+});
+
+test('outbound forwarding requires a message, one to five synced chats, and confirmation', () => {
+  const outbound = validateOutboundForward({
+    sourceChatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    recipientChatIds: [
+      'wa:60111111111@s.whatsapp.net',
+      'wa:120363000000000000@g.us',
+      'wa:60111111111@s.whatsapp.net',
+    ],
+    requestId: '12345678-1234-4234-9234-123456789abc',
+  });
+  assert.equal(outbound.sourceJid, '60123456789@s.whatsapp.net');
+  assert.deepEqual(outbound.recipientJids, [
+    '60111111111@s.whatsapp.net',
+    '120363000000000000@g.us',
+  ]);
+  assert.throws(() => validateOutboundForward({
+    sourceChatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    recipientChatIds: Array.from({ length: 6 }, (_, index) => `wa:6011111111${index}@s.whatsapp.net`),
+    requestId: '12345678-1234-4234-9234-123456789abc',
+  }), /at most five/);
+  assert.throws(() => validateOutboundForward({
+    sourceChatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    recipientChatIds: ['gmail:thread-1'],
+    requestId: '12345678-1234-4234-9234-123456789abc',
+  }), /synced WhatsApp chat/);
+  assert.throws(() => validateOutboundForward({
+    sourceChatId: 'wa:60123456789@s.whatsapp.net',
+    messageId: '3EB0123456789ABCDE',
+    recipientChatIds: ['wa:60111111111@s.whatsapp.net'],
   }), /confirmation request/);
 });
 

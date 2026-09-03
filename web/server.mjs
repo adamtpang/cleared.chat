@@ -35,6 +35,7 @@ import {
   setContactAlias as setWhatsAppContactAlias,
   sendWhatsAppText,
   sendWhatsAppReaction,
+  sendWhatsAppForward,
   retryVoiceTranscription as retryWhatsAppVoiceTranscription,
   transcribeUploadedVoice as transcribeUploadedWhatsAppVoice,
   getVoiceTranscriptionStatus as getWhatsAppVoiceTranscriptionStatus,
@@ -1963,6 +1964,16 @@ const server = createServer(async (req, res) => {
         chatId: body.chatId,
         messageId: body.messageId,
         emoji: body.emoji,
+        requestId: body.requestId,
+      }));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/wa/forward') {
+      const body = await readBody(req);
+      if (body.confirmed !== true) return send(res, 400, { error: 'Final confirmation is required.' });
+      return send(res, 200, await sendWhatsAppForward({
+        sourceChatId: body.sourceChatId,
+        messageId: body.messageId,
+        recipientChatIds: body.recipientChatIds,
         requestId: body.requestId,
       }));
     }

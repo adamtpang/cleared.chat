@@ -278,15 +278,33 @@ export async function pairWithQr() {
 // in server.mjs) so it can merge straight into the same ranking pipeline.
 const chatsById = new Map();   // id -> { id, title, imgUrl, network:'WhatsApp', type, isMuted, unreadCount, lastActivity }
 const messagesById = new Map(); // id -> [{ isSender, senderName, text, timestamp }] oldest -> newest
+const forwardMessagesById = new Map(); // bounded in-memory WAMessage cache for native forwards
 const lidToPhone = new Map();
 const contactAliases = new Map();
 const recentSendRequests = new Map();
 const recentReactionRequests = new Map();
+const recentForwardRequests = new Map();
+const MAX_FORWARD_MESSAGES = 10_000;
 let contactAliasesLoaded = false;
 
 export function canonicalWhatsAppJid(raw) {
   const jid = jidNormalizedUser(raw || '');
   return lidToPhone.get(jid) || jid;
+}
+
+function forwardMessageKey(jid, messageId) {
+  return `${canonicalWhatsAppJid(jid)}\n${String(messageId || '')}`;
+}
+
+function rememberForwardMessage(jid, message) {
+  const messageId = String(message?.key?.id || '');
+  if (!messageId) return;
+  const key = forwardMessageKey(jid, messageId);
+  forwardMessagesById.delete(key);
+  forwardMessagesById.set(key, message);
+  while (forwardMessagesById.size > MAX_FORWARD_MESSAGES) {
+    forwardMessagesById.delete(forwardMessagesById.keys().next().value);
+  }
 }
 
 function mergeChatIdentity(from, to) {
@@ -318,6 +336,12 @@ function mergeChatIdentity(from, to) {
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     messagesById.set(to, merged.slice(-200));
     messagesById.delete(from);
+  }
+  const prefix = `${from}\n`;
+  for (const [key, message] of [...forwardMessagesById]) {
+    if (!key.startsWith(prefix)) continue;
+    forwardMessagesById.delete(key);
+    forwardMessagesById.set(forwardMessageKey(to, message?.key?.id), message);
   }
 }
 
@@ -1041,6 +1065,7 @@ function ingestProtoMessages(msgs) {
     const voice = voiceInfo(m);
     const image = imageInfoForDisplay(m);
     if (!text && !voice && !image) continue;
+    rememberForwardMessage(jid, m);
     const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp) * 1000).toISOString() : new Date().toISOString();
     const stored = appendMessage(jid, {
       key: m.key?.id,
@@ -1202,6 +1227,51 @@ export function validateOutboundReaction({ chatId, messageId, emoji, requestId }
   return { jid, messageId: targetId, emoji: validReactionEmoji(emoji), requestId: id };
 }
 
+export function validateOutboundForward({ sourceChatId, messageId, recipientChatIds, requestId } = {}) {
+  const sourceJid = canonicalWhatsAppJid(whatsappJid(sourceChatId));
+  if (!sourceJid || !/@(?:s\.whatsapp\.net|g\.us|lid)$/.test(sourceJid) || sourceJid === 'status@broadcast') {
+    throw new Error('Choose a synced WhatsApp message to forward.');
+  }
+  const targetId = String(messageId || '').trim();
+  if (!/^[a-z0-9_-]{6,200}$/i.test(targetId)) throw new Error('Choose a valid WhatsApp message.');
+  if (!Array.isArray(recipientChatIds)) throw new Error('Choose at least one destination chat.');
+  const normalizedRecipients = recipientChatIds.map((chatId) => (
+    canonicalWhatsAppJid(whatsappJid(chatId))
+  ));
+  if (normalizedRecipients.some((jid) => !jid || !/@(?:s\.whatsapp\.net|g\.us|lid)$/.test(jid) || jid === 'status@broadcast')) {
+    throw new Error('Every destination must be a synced WhatsApp chat.');
+  }
+  const recipientJids = [...new Set(normalizedRecipients)];
+  if (!recipientJids.length) throw new Error('Choose at least one destination chat.');
+  if (recipientJids.length > 5) throw new Error('WhatsApp allows forwarding to at most five chats at once.');
+  const id = String(requestId || '').trim();
+  if (!/^[a-z0-9-]{16,80}$/i.test(id)) throw new Error('A valid confirmation request is required.');
+  return { sourceJid, messageId: targetId, recipientJids, requestId: id };
+}
+
+function forwardScore(message) {
+  const content = contentOf(message);
+  const key = Object.keys(content).find((name) => name === 'conversation' || name.endsWith('Message'));
+  return Math.max(0, Number(key && content?.[key]?.contextInfo?.forwardingScore) || 0);
+}
+
+function fallbackTextForward(outbound, stored) {
+  const text = String(stored?.text || '').trim();
+  if (!text || stored?.kind || /^\[[^\]]+\]$/.test(text)) {
+    throw new Error('The original media is not available yet. Keep WhatsApp connected, then retry.');
+  }
+  return {
+    key: {
+      remoteJid: outbound.sourceJid,
+      id: outbound.messageId,
+      fromMe: Boolean(stored.isSender),
+      ...(stored.participant ? { participant: stored.participant } : {}),
+    },
+    message: { conversation: text },
+    messageTimestamp: Math.floor(new Date(stored.timestamp || Date.now()).getTime() / 1000),
+  };
+}
+
 export async function sendWhatsAppText(input = {}) {
   if (!chatsById.size) loadStore();
   const outbound = validateOutboundText(input);
@@ -1282,6 +1352,79 @@ export async function sendWhatsAppReaction(input = {}) {
     return result;
   } catch (error) {
     recentReactionRequests.delete(outbound.requestId);
+    throw error;
+  }
+}
+
+export async function sendWhatsAppForward(input = {}) {
+  if (!chatsById.size) loadStore();
+  const outbound = validateOutboundForward(input);
+  const stored = (messagesById.get(outbound.sourceJid) || [])
+    .find((message) => message.key === outbound.messageId);
+  if (!stored) throw new Error('This message is not in your synced WhatsApp history.');
+  for (const jid of outbound.recipientJids) {
+    if (!chatsById.has(jid)) throw new Error('A selected destination is not in your synced WhatsApp inbox.');
+  }
+
+  const duplicate = recentForwardRequests.get(outbound.requestId);
+  if (duplicate) return duplicate;
+
+  const operation = (async () => {
+    await ensureWhatsAppStarted();
+    const activeSocket = await waitForOpenSocket();
+    const original = forwardMessagesById.get(forwardMessageKey(outbound.sourceJid, outbound.messageId))
+      || fallbackTextForward(outbound, stored);
+    const score = forwardScore(original);
+    if (score >= 5 && outbound.recipientJids.length > 1) {
+      throw new Error('WhatsApp allows a frequently forwarded message to go to one chat at a time.');
+    }
+    if (score > 0 && outbound.recipientJids.filter((jid) => jid.endsWith('@g.us')).length > 1) {
+      throw new Error('WhatsApp allows an already forwarded message to go to one group at a time.');
+    }
+
+    const forwarded = [];
+    const failed = [];
+    for (const jid of outbound.recipientJids) {
+      const messageId = createHash('sha256')
+        .update(`${outbound.requestId}\n${jid}`)
+        .digest('hex')
+        .slice(0, 24)
+        .toUpperCase();
+      try {
+        const response = await activeSocket.sendMessage(
+          jid,
+          { forward: original },
+          { messageId },
+        );
+        forwarded.push({
+          chatId: toWhatsAppSourceId(jid),
+          messageId: response?.key?.id || messageId,
+        });
+      } catch (error) {
+        failed.push({
+          chatId: toWhatsAppSourceId(jid),
+          error: String(error?.message || error).slice(0, 180),
+        });
+      }
+    }
+    return {
+      ok: failed.length === 0,
+      forwarded,
+      failed,
+      detail: failed.length
+        ? `Forwarded to ${forwarded.length} chats. ${failed.length} failed and were not sent.`
+        : '',
+      sentAt: new Date().toISOString(),
+    };
+  })();
+
+  recentForwardRequests.set(outbound.requestId, operation);
+  try {
+    const result = await operation;
+    setTimeout(() => recentForwardRequests.delete(outbound.requestId), 10 * 60 * 1000).unref?.();
+    return result;
+  } catch (error) {
+    recentForwardRequests.delete(outbound.requestId);
     throw error;
   }
 }

@@ -77,6 +77,14 @@ reaction. Only Adam's direct click on `Add reaction` may invoke `/api/wa/react`.
 Agents, triage, drafting, background jobs, and automated tests never invoke that
 endpoint or its confirmation control.
 
+Every synced WhatsApp message exposes a quiet `Forward message` action. It opens
+one review modal with the exact source preview, searchable synced contacts and
+groups, and at most five selected destination chats. Only Adam's direct click on
+the final `Forward` control may invoke `/api/wa/forward`. The adapter retains a
+bounded private in-memory copy of recent WhatsApp message objects so Baileys can
+preserve native forwarding metadata. Stored text can fall back safely after a
+restart; unavailable media asks Adam to keep WhatsApp connected and retry.
+
 When a conversation has unread messages, the chat pane collapses older read
 history behind `Show earlier messages`, places an unread divider at WhatsApp's
 count-derived boundary, and starts at the first unread message instead of the
@@ -96,20 +104,36 @@ reply. Previous and Next move within the ranked queue without changing WhatsApp.
 priority. `Show inbox` returns to the complete ranked list. The preference is
 restored with the latest saved triage after reload.
 
-A visible AI-output banner distinguishes a current model-backed triage from an
-old offline snapshot. It reports the number of unsent drafts and task chats,
-links directly into Focus, and offers `Run fresh triage` when a restored run has
-tasks but no AI drafts. Pressing that action hides the old banner immediately
-and replaces it with a global progress band that remains visible in Inbox and
-Focus. The band names each stage, explains what is happening, reports completed
-conversation counts, elapsed time, and percentage, and keeps failures visible.
+A compact AI-output warning appears only for a stale offline snapshot, failed
+run, or missing drafts. A current successful triage adds no persistent banner.
+Running triage replaces any warning with a global progress band that remains
+visible in Inbox and Focus. The band names each stage, explains what is
+happening, reports completed conversation counts, elapsed time, and percentage,
+and keeps failures visible.
 
-The primary top bar contains only Settings, Focus when a queue exists, and
-`Triage inbox`. Manual data controls, account management, density, theme, and
-text sizing live in Settings. A conversation header shows only `Cleared`,
-`Draft a reply`, and one overflow menu for naming, transcript export, full
-export, and thread questions. Keep secondary controls out of the primary daily
+The desktop shell follows WhatsApp's familiar three-column hierarchy: a narrow
+Cleared navigation rail, a Chats list with search and filter pills, and one
+flexible conversation pane. `Triage inbox` lives in the Chats header. AI
+priorities and Focus are additive rail destinations, not dashboard panels.
+Manual data controls, account management, density, theme, and text sizing live
+in Settings. A conversation header shows only `Cleared` and one overflow menu
+for naming, transcript export, full export, and thread questions. The composer
+owns AI drafting and review. Keep secondary controls out of the primary daily
 flow.
+
+The interface follows the Clearspace system in `docs/design-system.md` and the
+active parity contract in `FEATURE-PARITY.md`: neutral messaging surfaces,
+green reserved for progress and confirmed actions, dense contact-first rows,
+one visible navigation layer in Focus, and a responsive split view that becomes
+one surface on narrow screens. The layout may use learned WhatsApp interaction
+patterns, but never WhatsApp trademarks or proprietary assets. Do not restore
+the old purple or cyan-tinted product palettes.
+
+Daily rows expose only recognition-critical information. Unread shows contact,
+preview, time, and count. Priority shows contact, next action, and rank. Focus
+opens at the next action with one composer, while private plan details stay
+behind progressive disclosure. Do not restore per-row completion buttons,
+scores, source labels, duplicate draft actions, or successful-run banners.
 
 WhatsApp protocol, key-distribution, history-sync, and app-state events are
 control traffic. `web/whatsapp.mjs` drops them at ingestion and removes old
@@ -149,14 +173,14 @@ ranking and drafting. A newer message makes the action choice stale and requires
 review. Saving a plan never sends, marks read, archives, reacts, or clears the
 conversation; Adam still presses Cleared or confirms a reviewed reply himself.
 
-The Focus interface is deliberately one linear sequence: `Decide`, `Do`, then
-`Draft`. The Priorities sidebar has one open-loop list, not a second summary that
-duplicates its top rows. A saved decision collapses to one line until Adam edits
-it. Task prerequisites appear before drafting. Drafting is a primary action and
-opens the separate writing workspace. Hosted AI drafting requires either the
-platform AI key or the encrypted Anthropic key saved under Account; offline
-ranking must say clearly that drafts are unavailable instead of returning a fake
-draft.
+The Focus interface is deliberately one linear sequence: inspect the next
+action, complete any prerequisite, then draft. The Priority sidebar has one
+open-loop list, not a second summary that duplicates its top rows. The plan
+editor is collapsed disclosure until Adam opens it, while the current next
+action remains visible. Task prerequisites appear before the one reply composer.
+Hosted AI drafting requires either the platform AI key or the encrypted
+Anthropic key saved under Account; offline ranking must say clearly that drafts
+are unavailable instead of returning a fake draft.
 
 The local browser and desktop app expose `claude_local` and `codex_local` under
 Settings > Bring your own subscription. They use the logged-in Claude Code or
@@ -216,8 +240,8 @@ otherwise communicate externally as Adam. This remains true even when Adam says
 revise, and present copy-ready text. Adam performs the final communication
 action manually. In cleared.chat, Adam's own authenticated click on the final
 review modal is that manual action. Agents, triage, drafting, background jobs,
-and automated tests must never invoke `/api/wa/send`, `/api/wa/react`, or either
-modal's final confirmation control.
+and automated tests must never invoke `/api/wa/send`, `/api/wa/react`,
+`/api/wa/forward`, or any final confirmation control.
 
 ## How it works
 
@@ -229,6 +253,8 @@ modal's final confirmation control.
 5. Drafts are editable, contain no em dashes or emojis, and a synced WhatsApp
    reply sends only after Adam presses the one final confirmation control.
 6. Message reactions use common emojis and require their own final confirmation.
+7. Message forwarding supports up to five synced chats and requires its own
+   final confirmation.
 
 ## Private state
 
