@@ -23,8 +23,13 @@ when Clerk is not configured. Each account is routed to an isolated
 and encrypted AI settings. `Dockerfile.cloud` is the persistent container
 runtime. The volume must be mounted at `/data`.
 
-The hosted app at `https://app.cleared.chat` is deployed from `main`. Deployment
-receipts are recorded in `EVIDENCE.md` instead of duplicating a commit hash here.
+The hosted app at `https://app.cleared.chat` is deployed from `main` as the
+`cleared-chat` Docker container on the Hostinger VPS behind Caddy. The live
+container mounts `/var/lib/cleared-chat` at `/data` and binds only to
+`127.0.0.1:4323`. Build the replacement image while the current container is
+live, preserve the previous container as a rollback target, and never run two
+containers against the same `/data` volume. Deployment receipts are recorded
+in `EVIDENCE.md` instead of duplicating a commit hash here.
 It loads Clerk in the inbox shell so browser API requests carry a fresh bearer
 token after short-lived cookies rotate. An account with no hosted WhatsApp
 credentials opens Inbox Settings automatically. Google sign-in does not copy a

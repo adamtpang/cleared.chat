@@ -26,7 +26,20 @@ When a verified Google email matches an existing password account, the gateway
 links Clerk to that account's existing internal ID. Its WhatsApp pairing,
 message cache, snapshots, and saved AI key stay attached to the same workspace.
 
-## Railway setup
+## Production deployment
+
+`app.cleared.chat` currently runs as the `cleared-chat` Docker container on the
+Hostinger VPS behind Caddy. The container binds to `127.0.0.1:4323`, loads its
+environment from `/root/.cleared-chat-prod.env`, and mounts
+`/var/lib/cleared-chat` at `/data`.
+
+Build a versioned image while the existing container remains live. During
+cutover, stop and rename the existing container, then start the replacement
+with the same environment, port, restart policy, and data mount. Keep the old
+container as a rollback target. Never run two app containers against `/data`
+at the same time.
+
+## Railway alternative
 
 1. Create a Railway service from this GitHub repository.
 2. Attach a persistent volume at `/data` before creating the first account.
@@ -54,8 +67,9 @@ the local browser or desktop app for bring-your-own-subscription mode.
   configured.
 - User-provided AI keys are encrypted with AES-256-GCM.
 - WhatsApp directories are separated by account ID.
-- The app drafts and copies text. It has no send endpoint and never sends a
-  message for the user.
+- Replies, reactions, and forwards can be sent only when the signed-in user
+  reviews the exact action and presses its final confirmation control. Agents,
+  triage, drafting, background jobs, and tests never invoke send endpoints.
 
 ## Beta limits
 
