@@ -25,13 +25,13 @@ Cleared is the private AI inbox for relationship-heavy people: it finds every im
 
 ## Current truth
 
-The canonical company is `cleared.chat`. A legacy local folder named `beeper.chat` points to the same GitHub remote and contains a newer 2026-08-28 commit and richer evidence than the current `cleared.chat` clone. The hosted product is documented with Google sign-in, isolated WhatsApp workers, direct sync, open-loop detection, local transcription, triage, and editable drafts. Offer and revenue evidence remain blank.
+The canonical company is `cleared.chat`. A legacy local folder named `beeper.chat` points to the same GitHub remote and held richer evidence until 2026-09-03, when the canonical `cleared.chat` clone was fetched and rebased to the same origin/main tip. The hosted product is documented with Google sign-in, isolated WhatsApp workers, direct sync, open-loop detection, local transcription, triage, and editable drafts. Offer and revenue evidence remain blank.
 
 ### Verified evidence
 
 - Canonical `EVIDENCE.md` records the public rebrand, live hosted gateway, 811 cached chats, and 31 passing tests on 2026-08-28.
 - The newer legacy-folder evidence records 31 active unread chats, 45 clear reply-owed actions, up to 52 passing tests, and production health checks.
-- Both local folders use `https://github.com/adamtpang/cleared.chat.git`; the legacy folder is at commit `611bb07` from 22:09 and the canonical folder at `7ee3bdf` from 13:00 on 2026-08-28.
+- Both local folders use `https://github.com/adamtpang/cleared.chat.git`. As of 2026-09-03 both track origin/main at `5d08f0b`; the canonical folder carries one local WIP commit (`d0dc46e`) rebased on top of it, and the legacy folder holds only uncommitted edits. Commit `611bb07` is present in both object databases, so no legacy clone or bundle is needed to reconcile.
 - `OFFER.md` is still unfilled and no stranger revenue, customer, or retention receipt exists.
 
 ### Revenue chain
