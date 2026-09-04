@@ -3415,14 +3415,21 @@
       notice.innerHTML = '';
       return;
     }
-    const title = drafts === 0 ? 'Drafts need a fresh triage' : 'This plan is out of date';
-    const detail = taskChats + ' task chat' + (taskChats === 1 ? '' : 's') + ' restored from '
-      + (offline ? 'offline ranking' : 'an older triage') + '.';
+    // Offline ranking cannot produce drafts, so another triage will not help.
+    // Name the real cause and route to the place that connects a model.
+    const hosted = ACCOUNT_AI_READY !== null || Boolean(LOCAL_AI_STATE && LOCAL_AI_STATE.hosted);
+    const title = offline ? 'No AI model connected' : (drafts === 0 ? 'Drafts need a fresh triage' : 'This plan is out of date');
+    const detail = offline
+      ? 'This ranking used offline heuristics, so drafts and summaries are unavailable. '
+        + (hosted ? 'Save an Anthropic API key under Account, then run Triage inbox again.' : 'Choose Claude subscription or ChatGPT subscription in Settings, then run Triage inbox again.')
+      : taskChats + ' task chat' + (taskChats === 1 ? '' : 's') + ' restored from an older triage.';
     notice.classList.toggle('warn', warning);
     notice.hidden = false;
     notice.innerHTML = '<div class="notice-copy"><div class="notice-title">'+esc(title)+'</div>'
       + '<div class="notice-detail">'+esc(detail)+'</div></div>'
-      + '<button class="act primary" onclick="runTriage()">Refresh</button>';
+      + (offline
+        ? '<button class="act primary" onclick="openAiSetup()">Connect AI</button>'
+        : '<button class="act primary" onclick="runTriage()">Refresh</button>');
   }
 
   async function loadLatestTriage(openWhenReady){
@@ -3638,7 +3645,10 @@
       showTriageOutputStatus(data, action);
       let snapHtml = '';
       if (data.note) snapHtml += '<div class="snapnote">'+esc(noEm(data.note))+'</div>';
-      if (localMode) snapHtml += '<div class="snapnote">Offline ranking only. Choose Claude subscription or ChatGPT subscription in Settings to create drafts.</div>';
+      if (localMode) snapHtml += '<div class="snapnote">Offline ranking only. '
+        + ((ACCOUNT_AI_READY !== null || (LOCAL_AI_STATE && LOCAL_AI_STATE.hosted))
+          ? 'Save an Anthropic API key under Account to create drafts.'
+          : 'Choose Claude subscription or ChatGPT subscription in Settings to create drafts.') + '</div>';
       if (data.snapshot && !data.snapshot.error) {
         snapHtml += '<div class="snapnote">Snapshot '+esc(data.snapshot.when)+'. <a href="/api/snapshot" target="_blank">Open markdown</a></div>';
       }
