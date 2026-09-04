@@ -643,6 +643,12 @@
   .message-image-status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:18px;text-align:center}
   .message-image-button.ready{min-height:0;background:#111}
   .message-image-button.ready .message-image-status{display:none}
+  .bubble.has-sticker{background:none;border:0;box-shadow:none;padding:0}
+  .message-sticker-wrap{display:block;position:relative;min-width:96px;min-height:96px}
+  .message-sticker{width:auto;max-width:160px;max-height:160px;background:none;border-radius:0}
+  .message-sticker-status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font:600 11px var(--font);color:var(--muted-foreground)}
+  .message-sticker-wrap:has(.message-image:not([hidden])) .message-sticker-status{display:none}
   .message-image-caption{padding:8px 9px 3px;white-space:pre-wrap}
   .bubble.has-image .bmeta{padding:0 7px 3px;text-align:right}
   .bubble .bmeta{font-size:10.5px;opacity:.65;margin-top:4px}
@@ -3020,6 +3026,7 @@
   }
 
   function forwardMessageLabel(message, text){
+    if(message.kind === 'sticker' || message.text === '[sticker]') return 'Sticker';
     if(message.kind === 'image' || message.text === '[image]'){
       const caption = /^\[image\]$/i.test(String(text || '').trim()) ? '' : String(text || '').trim();
       return caption ? 'Image: ' + caption.slice(0,180) : 'Image';
@@ -3037,7 +3044,11 @@
 
   function messageBubble(m){
     const voice = m.kind === 'voice';
-    const image = m.kind === 'image' || m.text === '[image]';
+    // Only stickers ingested with media can be drawn. Ones stored before
+    // sticker caching existed keep their text label rather than showing a
+    // box that can only fail.
+    const sticker = m.kind === 'sticker';
+    const image = sticker || m.kind === 'image' || m.text === '[image]';
     const voiceStatus = String(m.transcriptionStatus || '');
     let text = String(m.transcript || m.text || '');
     text = text.replace(/^\[Voice note transcript\]\s*/i, '');
@@ -3076,11 +3087,16 @@
         +'<input hidden type="file" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav" onchange="uploadVoiceTranscript(event,'+jsq(openId)+','+jsq(m.key)+',this)">'
         +'</div>'
       : '';
-    const caption = image && /^\[image\]$/i.test(text.trim()) ? '' : text;
+    const caption = image && /^\[(image|sticker)\]$/i.test(text.trim()) ? '' : text;
     const imageUrl = image && m.key && /^wa:/.test(openId || '')
       ? '/api/wa/media?chatId='+encodeURIComponent(openId)+'&messageId='+encodeURIComponent(m.key)
       : '';
-    const bubbleBody = image
+    const bubbleBody = sticker
+      ? '<span class="message-sticker-wrap">'
+        + '<img class="message-image message-sticker" hidden alt="WhatsApp sticker" data-media-url="'+attr(imageUrl)+'">'
+        + '<span class="message-sticker-status">Loading sticker</span>'
+        + '</span>'
+      : image
       ? '<button class="message-image-button" type="button" onclick="openMessageImage(this)" aria-label="Open image">'
         + '<span class="message-image-status">Loading image</span>'
         + '<img class="message-image" hidden alt="WhatsApp image" data-media-url="'+attr(imageUrl)+'">'
@@ -3088,7 +3104,7 @@
         + (caption ? '<div class="message-image-caption">'+esc(caption)+'</div>' : '')
       : voiceLabel + '<div class="'+(voice?'voice-note-text':'')+'">'+esc(text)+'</div>';
     return '<div class="bubble-wrap '+(m.isSender?'me':'them')+'">'
-      + '<div class="bubble '+(m.isSender?'me':'them')+(voice?' voice-note':'')+(image?' has-image':'')+'">'
+      + '<div class="bubble '+(m.isSender?'me':'them')+(voice?' voice-note':'')+(image&&!sticker?' has-image':'')+(sticker?' has-sticker':'')+'">'
       +   bubbleBody
       +   retry
       +   '<div class="bmeta" title="'+attr(messageDateTitle(m.timestamp))+'">'+esc(metadata)+'</div>'
@@ -3106,7 +3122,9 @@
     const images = [...root.querySelectorAll('.message-image[data-media-url]')];
     await Promise.all(images.map(async (image) => {
       const button = image.closest('.message-image-button');
-      const status = button?.querySelector('.message-image-status');
+      const sticker = image.classList.contains('message-sticker');
+      const status = button?.querySelector('.message-image-status')
+        || image.closest('.message-sticker-wrap')?.querySelector('.message-sticker-status');
       try{
         const response = await fetch(image.dataset.mediaUrl);
         if(!response.ok) throw new Error('Image unavailable');
@@ -3118,7 +3136,8 @@
         image.hidden = false;
         button?.classList.add('ready');
       }catch{
-        if(status) status.textContent = 'Image unavailable';
+        // A sticker that predates local caching has no stored media to serve.
+        if(status) status.textContent = sticker ? 'Sticker unavailable' : 'Image unavailable';
         if(button) button.disabled = true;
       }
     }));

@@ -479,11 +479,16 @@ export function messageTextForDisplay(m) {
 }
 
 export function imageInfoForDisplay(m) {
-  const image = contentOf(m).imageMessage;
+  const content = contentOf(m);
+  // Stickers are ordinary WhatsApp media: same download, cache, and serve path
+  // as a photo. Only the rendering differs, so they carry their own kind.
+  const sticker = content.stickerMessage;
+  const image = content.imageMessage || sticker;
   if (!image) return null;
+  const fallbackType = sticker ? 'image/webp' : 'image/jpeg';
   const mimetype = /^image\/[a-z0-9.+-]+$/i.test(String(image.mimetype || ''))
     ? String(image.mimetype)
-    : 'image/jpeg';
+    : fallbackType;
   let thumbnailDataUrl = null;
   try {
     const thumbnail = image.jpegThumbnail ? Buffer.from(image.jpegThumbnail) : null;
@@ -492,11 +497,12 @@ export function imageInfoForDisplay(m) {
     }
   } catch { /* a missing or malformed thumbnail is non-fatal */ }
   return {
-    kind: 'image',
+    kind: sticker ? 'sticker' : 'image',
     mimetype,
     width: numeric(image.width),
     height: numeric(image.height),
     fileSize: numeric(image.fileLength),
+    isAnimated: sticker ? Boolean(sticker.isAnimated) : false,
     thumbnailDataUrl,
   };
 }
@@ -1528,7 +1534,9 @@ export async function getMessageImage({ chatId, messageId } = {}) {
   const id = String(messageId || '').trim();
   if (!jid || !id) return null;
   const stored = (messagesById.get(jid) || [])
-    .find((message) => message.key === id && (message.kind === 'image' || message.text === '[image]'));
+    .find((message) => message.key === id
+      && (message.kind === 'image' || message.kind === 'sticker'
+        || message.text === '[image]' || message.text === '[sticker]'));
   if (!stored) return null;
   const cacheKey = stored.cacheKey || imageCacheKey(jid, id);
   stored.cacheKey = cacheKey;
@@ -1543,7 +1551,9 @@ export async function getMessageImage({ chatId, messageId } = {}) {
   if (existsSync(path)) {
     return {
       buffer: readFileSync(path),
-      mimetype: /^image\//i.test(String(stored.mimetype || '')) ? stored.mimetype : 'image/jpeg',
+      mimetype: /^image\//i.test(String(stored.mimetype || ''))
+        ? stored.mimetype
+        : (stored.kind === 'sticker' ? 'image/webp' : 'image/jpeg'),
       quality: 'full',
     };
   }
