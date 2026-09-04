@@ -9,7 +9,9 @@
   // Runs before any paint: read the saved theme and stamp it on <html> so
   // the first frame is already correct.
   (function(){ try{ var m=localStorage.getItem("bc-theme")||"system";
-    if(m!=="system") document.documentElement.setAttribute("data-theme",m); }catch(e){} })();
+    if(m!=="system") document.documentElement.setAttribute("data-theme",m);
+    var a=localStorage.getItem("cc-accent")||"evergreen";
+    if(a!=="evergreen") document.documentElement.setAttribute("data-accent",a); }catch(e){} })();
 </script>
 <style>
   /* Clearspace: neutral messaging surfaces with green reserved for progress
@@ -19,7 +21,7 @@
     --background:#111513;--foreground:#eef2ef;
     --card:#181d1b;--card-foreground:var(--foreground);
     --popover:#181d1b;--popover-foreground:var(--foreground);
-    --primary:#70d1ae;--primary-foreground:#0d211a;
+    --primary:var(--accent-dark,#70d1ae);--primary-foreground:var(--accent-dark-fg,#0d211a);
     --secondary:#222826;--secondary-foreground:var(--foreground);
     --muted:#222826;--muted-foreground:#aab4b0;
     --accent:#22342d;--accent-foreground:var(--foreground);
@@ -46,7 +48,7 @@
     --background:#f8f8f6;--foreground:#1f2825;
     --card:#ffffff;--card-foreground:var(--foreground);
     --popover:#ffffff;--popover-foreground:var(--foreground);
-    --primary:#0f7b63;--primary-foreground:#ffffff;
+    --primary:var(--accent-light,#0f7b63);--primary-foreground:var(--accent-light-fg,#ffffff);
     --secondary:#eef1ee;--secondary-foreground:var(--foreground);
     --muted:#eef1ee;--muted-foreground:#68736f;
     --accent:#e9f3ee;--accent-foreground:var(--foreground);
@@ -59,7 +61,7 @@
       --background:#f8f8f6;--foreground:#1f2825;
       --card:#ffffff;--card-foreground:var(--foreground);
       --popover:#ffffff;--popover-foreground:var(--foreground);
-      --primary:#0f7b63;--primary-foreground:#ffffff;
+      --primary:var(--accent-light,#0f7b63);--primary-foreground:var(--accent-light-fg,#ffffff);
       --secondary:#eef1ee;--secondary-foreground:var(--foreground);
       --muted:#eef1ee;--muted-foreground:#68736f;
       --accent:#e9f3ee;--accent-foreground:var(--foreground);
@@ -68,6 +70,21 @@
       --blue:#2b67c0;--ok:#0f7b63;--warn:#996215;--danger:var(--destructive);
     }
   }
+  /* Accent presets. Each names one pair per theme; the blocks above choose
+     which half applies, so an accent never has to know the current theme.
+     Success, warning, and danger stay fixed so meaning does not follow taste. */
+  :root[data-accent="ocean"]{--accent-dark:#7cc0ff;--accent-dark-fg:#0a1e30;--accent-light:#1f6feb;--accent-light-fg:#ffffff}
+  :root[data-accent="violet"]{--accent-dark:#c3a9ff;--accent-dark-fg:#1b1233;--accent-light:#6b40c6;--accent-light-fg:#ffffff}
+  :root[data-accent="ember"]{--accent-dark:#f6ab84;--accent-dark-fg:#331708;--accent-light:#a94a17;--accent-light-fg:#ffffff}
+  :root[data-accent="rose"]{--accent-dark:#f4a5c0;--accent-dark-fg:#330f1e;--accent-light:#a93a5f;--accent-light-fg:#ffffff}
+  :root[data-accent="graphite"]{--accent-dark:#bcc7d2;--accent-dark-fg:#1a1f25;--accent-light:#455260;--accent-light-fg:#ffffff}
+  .accentrow{display:flex;gap:var(--space-2x);flex-wrap:wrap}
+  .swatch{width:26px;height:26px;border-radius:var(--r-full);border:2px solid var(--border);cursor:pointer;padding:0;
+    display:inline-flex;align-items:center;justify-content:center;transition:transform .12s var(--ease-out),border-color .12s var(--ease-out)}
+  .swatch:hover{transform:scale(1.08)}
+  .swatch:focus-visible{outline:none;box-shadow:0 0 0 3px rgb(from var(--ring) r g b / 45%)}
+  .swatch[aria-pressed="true"]{border-color:var(--foreground)}
+  .swatch[aria-pressed="true"]::after{content:"";width:8px;height:8px;border-radius:var(--r-full);background:var(--primary-foreground)}
   /* Tints below use CSS relative-color syntax - rgb(from var(--x) r g b / N%)
      - to derive a translucent shade straight from the solid token instead of
      a separately hand-picked rgba() duplicate. Chromium 111+ (Electron ok). */
@@ -1076,6 +1093,10 @@
         </div></div>
       </div>
       <div class="setrow">
+        <div><div class="lbl2">Accent</div><div class="hint2">Colors selection, progress, and primary actions.</div></div>
+        <div class="ctl"><div class="accentrow" id="accentrow"></div></div>
+      </div>
+      <div class="setrow">
         <div><div class="lbl2">Density</div><div class="hint2">Tighter spacing fits more rows on screen.</div></div>
         <div class="ctl"><div class="seg" id="denseg">
           <button onclick="setDensity(0)" data-d="0">Comfortable</button>
@@ -1207,6 +1228,9 @@
   }
   applyUi();
   applyTheme();
+  // Deferred: ACCENTS is declared later in this script, so calling straight
+  // through here would hit its temporal dead zone.
+  setTimeout(applyAccent, 0);
 
   // Auto-load the complete list on open. The old behaviour (blank until you
   // click) made an empty app look broken; nothing here calls a model, so it
@@ -2133,12 +2157,49 @@
     applyTheme();
   }
   function applyTheme(){
+    setTimeout(renderAccentRow, 0);
     const mode = localStorage.getItem('bc-theme') || 'system';
     if(mode === 'system') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', mode);
     document.querySelectorAll('#themeseg button').forEach(b =>
       b.classList.toggle('on', b.dataset.t === mode));
   }
+  const ACCENTS = [
+    ['evergreen','Evergreen','#0f7b63','#70d1ae'],
+    ['ocean','Ocean','#1f6feb','#7cc0ff'],
+    ['violet','Violet','#6b40c6','#c3a9ff'],
+    ['ember','Ember','#a94a17','#f6ab84'],
+    ['rose','Rose','#a93a5f','#f4a5c0'],
+    ['graphite','Graphite','#455260','#bcc7d2'],
+  ];
+  function currentAccent(){
+    const saved = localStorage.getItem('cc-accent') || 'evergreen';
+    return ACCENTS.some(([id]) => id === saved) ? saved : 'evergreen';
+  }
+  function setAccent(id){
+    const accent = ACCENTS.some(([value]) => value === id) ? id : 'evergreen';
+    localStorage.setItem('cc-accent', accent);
+    applyAccent();
+  }
+  function applyAccent(){
+    const accent = currentAccent();
+    if(accent === 'evergreen') document.documentElement.removeAttribute('data-accent');
+    else document.documentElement.setAttribute('data-accent', accent);
+    renderAccentRow();
+  }
+  function renderAccentRow(){
+    const row = $('#accentrow');
+    if(!row) return;
+    const accent = currentAccent();
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+      || (!document.documentElement.getAttribute('data-theme')
+          && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    row.innerHTML = ACCENTS.map(([id, label, light, darkHex]) =>
+      '<button class="swatch" role="button" aria-pressed="'+(id === accent)+'" title="'+attr(label)+'"'
+      + ' aria-label="'+attr(label)+' accent" style="background:'+attr(dark ? darkHex : light)+'"'
+      + ' onclick="setAccent('+jsq(id)+')"></button>').join('');
+  }
+
   function setDensity(on){
     localStorage.setItem('bc-compact', on ? '1' : '0');
     applyUi(); syncSegs();
@@ -3432,21 +3493,30 @@
       notice.innerHTML = '';
       return;
     }
-    // Offline ranking cannot produce drafts, so another triage will not help.
-    // Name the real cause and route to the place that connects a model.
+    // Three different causes, three different cures. A model that was never
+    // connected needs setup; a model that gave out partway through a run needs
+    // the run repeating; a merely old plan needs a refresh.
     const hosted = ACCOUNT_AI_READY !== null || Boolean(LOCAL_AI_STATE && LOCAL_AI_STATE.hosted);
-    const title = offline ? 'No AI model connected' : (drafts === 0 ? 'Drafts need a fresh triage' : 'This plan is out of date');
-    const detail = offline
+    const partial = /partial-local-fallback/i.test(llm);
+    const noModel = offline && !partial;
+    const title = noModel
+      ? 'No AI model connected'
+      : partial
+        ? 'The model stopped partway through'
+        : (drafts === 0 ? 'Drafts need a fresh triage' : 'This plan is out of date');
+    const detail = noModel
       ? 'This ranking used offline heuristics, so drafts and summaries are unavailable. '
         + (hosted ? 'Save an Anthropic API key under Account, then run Triage inbox again.' : 'Choose Claude subscription or ChatGPT subscription in Settings, then run Triage inbox again.')
-      : taskChats + ' task chat' + (taskChats === 1 ? '' : 's') + ' restored from an older triage.';
+      : partial
+        ? 'Some conversations were ranked without the model and have no draft. Running triage again usually finishes them.'
+        : taskChats + ' task chat' + (taskChats === 1 ? '' : 's') + ' restored from an older triage.';
     notice.classList.toggle('warn', warning);
     notice.hidden = false;
     notice.innerHTML = '<div class="notice-copy"><div class="notice-title">'+esc(title)+'</div>'
       + '<div class="notice-detail">'+esc(detail)+'</div></div>'
-      + (offline
+      + (noModel
         ? '<button class="act primary" onclick="openAiSetup()">Connect AI</button>'
-        : '<button class="act primary" onclick="runTriage()">Refresh</button>');
+        : '<button class="act primary" onclick="runTriage()">Run triage</button>');
   }
 
   async function loadLatestTriage(openWhenReady){

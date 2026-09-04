@@ -48,6 +48,12 @@ in light mode and `#70d1ae` in dark mode. Corners use a maximum 8px radius for
 tools and sheets, with fully rounded treatments reserved for avatars, counts,
 search, and message bubbles.
 
+Accent is the one customizable token pair. Six presets ship (Evergreen,
+Ocean, Violet, Ember, Rose, Graphite), each defining `--primary` and
+`--primary-foreground` for both themes and nothing else. Semantic status colors
+never change with the accent. See `DESIGN.md` for the table and its measured
+contrast ratios.
+
 Typography uses the native system stack. This removes a render-blocking font
 request and keeps the app aligned with its host operating system.
 

@@ -13,9 +13,35 @@ surfaces, restrained badges, muted secondary text, and consistent focus rings.
 That anatomy is adapted to a two-pane messenger with a collapsible chat list
 and one active conversation.
 
+## Accent presets
+
+Accent is customizable. `Settings > Accent` offers six presets, stored per
+browser in `cc-accent` and stamped on `<html>` as `data-accent` before the
+first paint, so the choice never flashes. Evergreen is the default and carries
+no attribute.
+
+| Accent | Light `--primary` | Dark `--primary` | Light AA | Dark AA |
+|---|---|---|---|---|
+| Evergreen (default) | `#0f7b63` | `#70d1ae` | 5.21 | 9.14 |
+| Ocean | `#1f6feb` | `#7cc0ff` | 4.63 | 8.73 |
+| Violet | `#6b40c6` | `#c3a9ff` | 6.62 | 8.84 |
+| Ember | `#a94a17` | `#f6ab84` | 5.71 | 8.74 |
+| Rose | `#a93a5f` | `#f4a5c0` | 6.07 | 8.95 |
+| Graphite | `#455260` | `#bcc7d2` | 7.99 | 9.66 |
+
+Ratios are `--primary-foreground` on `--primary`, measured on the rendered page
+on 2026-09-04. All twelve combinations pass WCAG AA.
+
+An accent sets only `--primary` and `--primary-foreground`. Success, warning,
+and danger stay fixed, so meaning never follows taste. Everything downstream
+(`--ring`, `--brand`, `--grad`, selection rails) already derives from
+`--primary` and follows automatically.
+
 ## Direction
 
-The selected palette is **Open Channel**. It is calm, technical, and direct.
+The shipped palette is **Clearspace**, the green system described in
+`docs/design-system.md`. An earlier aqua draft named Open Channel is recorded
+below for history and is not what the app renders. It is calm, technical, and direct.
 The workspace is pale aqua in light mode and deep blue-black in dark mode.
 White or lifted charcoal surfaces hold conversations. Teal is reserved for
 selection, progress, and primary actions.
