@@ -2192,6 +2192,18 @@
 
   let waPoll = null;
   let waPollRate = 0;
+  let waQrShownAt = 0;
+  // Independent of the status poll: warn as soon as the visible code is old
+  // enough that WhatsApp will reject it.
+  setInterval(() => {
+    const age = $('#waqrage');
+    if(!age || !waQrShownAt) return;
+    const seconds = Math.round((Date.now() - waQrShownAt) / 1000);
+    age.textContent = seconds > 25
+      ? 'This code is ' + seconds + ' seconds old and may already be rejected. Select New QR, then scan straight away.'
+      : 'Keep this window in front while you scan. This code rotates every few seconds.';
+    age.classList.toggle('pairerror', seconds > 25);
+  }, 1000);
   let waStartedAt = 0;
   let waLastLoadedCount = -1;
   let waReloadPending = false;
@@ -2219,6 +2231,17 @@
   function startWhatsAppPoll(){
     scheduleWhatsAppPoll(1000);
   }
+  // Browsers throttle timers in a hidden or unfocused tab, so a polled QR can
+  // sit on screen long after WhatsApp rotated it. Scanning that stale image
+  // fails with a generic connection error, so refresh the moment the pairing
+  // pane is actually being looked at.
+  function refreshWhatsAppStatusIfPairing(){
+    if(document.visibilityState !== 'visible') return;
+    if(!document.querySelector('#setmodal.on')) return;
+    refreshWhatsAppStatus();
+  }
+  document.addEventListener('visibilitychange', refreshWhatsAppStatusIfPairing);
+  window.addEventListener('focus', refreshWhatsAppStatusIfPairing);
   function scheduleWhatsAppPoll(interval){
     if(waPoll && waPollRate === interval) return;
     clearInterval(waPoll);
@@ -2240,9 +2263,10 @@
         qrButton.textContent = 'Connected';
         scheduleWhatsAppPoll(d.historyStatus === 'complete' ? 10000 : 1800);
       }else if(d.status === 'qr' && d.qrDataUrl){
+        waQrShownAt = Date.now();
         $('#wapairresult').innerHTML = whatsappProgress(d,2,3,'The QR is ready. Open WhatsApp on your phone, then Linked Devices, Link a Device.')
           + '<img class="pairqr" src="'+esc(d.qrDataUrl)+'" alt="WhatsApp linking QR">'
-          + '<div class="pairdetail">Keep this screen open until cleared.chat confirms the connection.</div>';
+          + '<div class="pairdetail" id="waqrage">Keep this window in front while you scan. This code rotates every few seconds.</div>';
         qrButton.disabled = false;
         qrButton.textContent = 'New QR';
         scheduleWhatsAppPoll(1800);
