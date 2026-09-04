@@ -1563,6 +1563,8 @@ const profilePhotoRequests = new Map();
 const profilePhotoQueue = [];
 let activeProfilePhotoRequests = 0;
 const PROFILE_PHOTO_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const PROFILE_PHOTO_PAUSE_MS = 10 * 60 * 1000;
+let profilePhotoPauseUntil = 0;
 
 export function isProfilePhotoCacheFresh(chat = {}, now = Date.now()) {
   const checkedAt = new Date(chat.profilePhotoCheckedAt || 0).getTime();
@@ -1573,7 +1575,7 @@ function limitedProfilePhotoRequest(run) {
   return new Promise((resolve, reject) => {
     profilePhotoQueue.push({ run, resolve, reject });
     const drain = () => {
-      while (activeProfilePhotoRequests < 3 && profilePhotoQueue.length) {
+      while (activeProfilePhotoRequests < 1 && profilePhotoQueue.length) {
         const job = profilePhotoQueue.shift();
         activeProfilePhotoRequests++;
         Promise.resolve().then(job.run).then(job.resolve, job.reject).finally(() => {
@@ -1597,9 +1599,11 @@ export async function getProfilePhoto(chatId) {
   }
   if (profilePhotoRequests.has(jid)) return profilePhotoRequests.get(jid);
 
+  if (Date.now() < profilePhotoPauseUntil) return null;
   const request = limitedProfilePhotoRequest(async () => {
     await ensureWhatsAppStarted();
     if (!sock || status !== 'open') return null;
+    if (Date.now() < profilePhotoPauseUntil) return null;
     try {
       const imgUrl = await sock.profilePictureUrl(jid, 'preview', 7000);
       upsertChat(jid, {
@@ -1613,8 +1617,15 @@ export async function getProfilePhoto(chatId) {
       // hours. A timeout, rate limit, or a group whose metadata has not synced
       // yet is a transient miss, and caching it hides the photo for the rest of
       // the day. Leave those uncached so the next request retries.
-      const reason = String(error?.data || error?.output?.statusCode || error?.message || '');
-      const noPhoto = /404|item-not-found|not-found/i.test(reason);
+      const raw = String(error?.message || error || '');
+      const reason = String(error?.data || error?.output?.statusCode || raw);
+      const noPhoto = /404|item-not-found|not-found/i.test(reason) || /item-not-found/i.test(raw);
+      // WhatsApp rate-limits profile lookups. Asking harder is how an account
+      // gets its linked device revoked, so stop the queue for a while instead.
+      if (/rate-overlimit|429/i.test(raw) || /rate-overlimit|429/i.test(reason)) {
+        profilePhotoPauseUntil = Date.now() + PROFILE_PHOTO_PAUSE_MS;
+        profilePhotoQueue.length = 0;
+      }
       if (process.env.WA_PHOTO_DEBUG === '1') {
         console.log('[photo]', jid, '| reason:', reason, '| noPhoto:', noPhoto, '| raw:', String(error?.message || error));
       }
@@ -1629,7 +1640,7 @@ export async function getProfilePhoto(chatId) {
   return request;
 }
 
-export async function hydrateProfilePhotos({ limit = 160 } = {}) {
+export async function hydrateProfilePhotos({ limit = 24 } = {}) {
   if (!chatsById.size) loadStore();
   if (!sock || status !== 'open') return { checked: 0, found: 0 };
   const candidates = [...chatsById.values()]
