@@ -1793,7 +1793,19 @@ function startSocket({ state, saveCreds }, opts) {
     if (connection === 'close') {
       const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const loggedOut = code === DisconnectReason.loggedOut;
-      const error = String(lastDisconnect?.error?.message || lastDisconnect?.error || 'WhatsApp closed the connection');
+      // WhatsApp answers a refused link with a bare 401, so keep whatever
+      // reason it attached: that is the only clue separating an expired code
+      // from a device-limit or account-level refusal.
+      const payload = lastDisconnect?.error?.output?.payload;
+      const reason = payload && typeof payload === 'object'
+        ? [payload.error, payload.message, payload.reason].filter(Boolean).join(' ')
+        : '';
+      const error = String(
+        reason || lastDisconnect?.error?.message || lastDisconnect?.error || 'WhatsApp closed the connection',
+      );
+      if (code === DisconnectReason.loggedOut) {
+        console.log('[whatsapp] link refused (401):', error, JSON.stringify(payload || {}));
+      }
       latestQr = null;
       latestPairingCode = null;
       setConnectionStatus(
