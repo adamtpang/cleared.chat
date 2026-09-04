@@ -13,8 +13,7 @@ drafts.
 
 The runtime is `web/server.mjs`, the direct WhatsApp adapter is
 `web/whatsapp.mjs`, the interface is `web/public/index.html`, and the desktop
-shell is `desktop/main.js`. Gmail and Discord are optional adapters. The Beeper
-Desktop adapter is legacy, disabled by default, and not required.
+shell is `desktop/main.js`. Gmail and Discord are optional adapters.
 
 Hosted accounts enter through `cloud/gateway.mjs`. When Clerk keys are set, the
 gateway verifies Google sessions and links a verified Google email to the

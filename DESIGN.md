@@ -53,8 +53,8 @@ Status colors:
 ## Typography
 
 Inter remains the product sans because it is already loaded by the app,
-renders dense messaging data clearly, and avoids carrying forward Beeper's
-Haskoy identity. System monospace is limited to compact labels, codes, and
+renders dense messaging data clearly, and avoids carrying forward the
+pre-rebrand Haskoy identity. System monospace is limited to compact labels, codes, and
 technical metadata. Numerals use tabular spacing.
 
 ## Components

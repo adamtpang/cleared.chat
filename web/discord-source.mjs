@@ -48,7 +48,7 @@ export function ensureDiscordStarted() {
 
 // Returns chat-shaped items (matches cleared.chat's own chat objects, see
 // fetchConversations in server.mjs) so it merges straight into the same
-// ranking pipeline as Beeper + Gmail + WhatsApp-direct.
+// ranking pipeline as Gmail + WhatsApp-direct.
 export async function fetchDiscordDMs(limit = 40) {
   if (!discordConfigured()) return { items: [], error: 'DISCORD_TOKEN not set' };
   try {

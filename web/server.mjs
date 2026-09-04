@@ -67,9 +67,6 @@ const PORT = Number(process.env.PORT || 4317);
 const DEMO = process.env.DEMO === '1';
 const LICENSE_SECRET = process.env.LICENSE_SECRET || '';
 const LICENSE_FILE = join(DIR, '.license.json');
-const BEEPER_BASE = process.env.BEEPER_API_BASE || 'http://127.0.0.1:23373';
-const BEEPER_TOKEN = process.env.BEEPER_ACCESS_TOKEN || '';
-const BEEPER_ENABLED = process.env.BEEPER_ENABLED === '1' && Boolean(BEEPER_TOKEN);
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED === '1';
 // Pull WhatsApp directly through the local Baileys linked-device session.
 const WHATSAPP_DIRECT = process.env.WHATSAPP_DIRECT !== '0';
@@ -129,154 +126,6 @@ const SAMPLE = [
     summary: 'Spam group invite.', nextStep: 'No action.', nextAction: 'No action.', draft: '' },
 ];
 
-// --- Beeper local API ---
-async function beeper(path, opts = {}) {
-  const r = await fetch(`${BEEPER_BASE}${path}`, {
-    ...opts,
-    headers: { 'Authorization': `Bearer ${BEEPER_TOKEN}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
-  });
-  if (!r.ok) throw new Error(`Beeper ${path} -> ${r.status} ${await r.text().catch(() => '')}`);
-  return r.status === 204 ? null : r.json();
-}
-
-// Who I am, used to detect direct address in group chats. Filled on first use.
-let ME = null;
-async function whoAmI() {
-  if (ME) return ME;
-  try {
-    const accts = await beeper('/v1/accounts');
-    const self = (Array.isArray(accts) ? accts : accts.items || []).find((a) => a.user && a.user.isSelf);
-    ME = self ? { id: self.user.id || '', name: self.user.fullName || self.user.displayText || '' } : { id: '', name: '' };
-  } catch { ME = { id: '', name: '' }; }
-  return ME;
-}
-
-// Normalize a Beeper message into the shape fates.mjs expects.
-const normMsg = (x) => ({
-  isSender: !!x.isSender,
-  senderName: x.senderName || '',
-  text: stripHtml(x.text || ''),
-  timestamp: x.timestamp,
-  mentions: x.mentions || [],
-});
-
-// Run async jobs with a bounded number in flight. Beeper's local API is fast
-// but 900 sequential round-trips is not; 12 at a time keeps it civil.
-async function pool(items, size, fn) {
-  const out = new Array(items.length);
-  let i = 0;
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => {
-    for (;;) {
-      const idx = i++;
-      if (idx >= items.length) return;
-      out[idx] = await fn(items[idx], idx);
-    }
-  }));
-  return out;
-}
-
-// EVERY chat, across every inbox, archived included. `inbox=primary` (what
-// fetchConversations uses for triage) is only 125 of ~900 - low-priority and
-// archive are separate buckets the filtered call never returns.
-async function fetchAllChats({ withPreviews = true, previewConcurrency = 12, includeArchived = false } = {}) {
-  await whoAmI();
-  progress.stage = 'fetching every chat';
-  const found = new Map();
-  let cursor = null;
-  for (let page = 0; page < 40; page++) {
-    let q = '?limit=200';
-    if (cursor) q += `&cursor=${encodeURIComponent(cursor)}&direction=before`;
-    const res = await beeper(`/v1/chats/search${q}`);
-    const items = res.items || [];
-    for (const c of items) found.set(c.id || c.chatID, c);
-    progress.total = found.size;
-    if (!res.hasMore || !res.oldestCursor || res.oldestCursor === cursor || !items.length) break;
-    cursor = res.oldestCursor;
-  }
-  const all = [...found.values()];
-  const archivedCount = all.filter((c) => c.isArchived).length;
-  // Dropping archived here is what makes the load fast: ~770 fewer round trips
-  // for a collapsed list nobody scrolls. The count still gets surfaced.
-  const list = includeArchived ? all : all.filter((c) => !c.isArchived);
-  progress.stage = 'reading previews'; progress.total = list.length; progress.done = 0;
-
-  const shape = (c, messages) => ({
-    id: c.id || c.chatID,
-    title: c.title || c.name,
-    network: c.network || c.accountID,
-    type: c.type === 'group' ? 'group' : 'single',
-    isMuted: !!c.isMuted,
-    isArchived: !!c.isArchived,
-    unread: c.unreadCount,
-    lastActivity: c.lastActivity,
-    me: ME,
-    messages,
-  });
-
-  if (!withPreviews) { const q = list.map((c) => shape(c, [])); q.archivedCount = archivedCount; return q; }
-
-  const out = await pool(list, previewConcurrency, async (c) => {
-    let messages = [];
-    try {
-      const m = await beeper(`/v1/chats/${c.id || c.chatID}/messages?limit=1`);
-      messages = (m.items || m || [])
-        .filter((x) => x.type !== 'REACTION' && !x.isHidden)
-        .map(normMsg)
-        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    } catch { /* preview is best-effort; the chat still belongs in the list */ }
-    progress.done++;
-    return shape(c, messages);
-  });
-  out.archivedCount = archivedCount;
-  return out;
-}
-
-// Conversation-level ingest. type and isMuted are load-bearing: the group-burst
-// and mute calibration rules depend on them.
-async function fetchConversations({ inbox = 'primary', limit = 60, msgs = 15, stage = 'reading chats' } = {}) {
-  await whoAmI();
-  progress.stage = 'fetching chat list';
-  // the API caps limit at 200 per page, so walk pages until we have enough
-  const PAGE = 100;
-  const found = new Map();
-  let cursor = null;
-  while (found.size < limit) {
-    let q = `?limit=${Math.min(PAGE, limit)}` + (inbox ? `&inbox=${inbox}` : '');
-    if (cursor) q += `&cursor=${encodeURIComponent(cursor)}&direction=before`;
-    const page = await beeper(`/v1/chats/search${q}`);
-    const items = page.items || [];
-    for (const c of items) found.set(c.id || c.chatID, c);
-    if (!page.hasMore || !page.oldestCursor || page.oldestCursor === cursor || !items.length) break;
-    cursor = page.oldestCursor;
-  }
-  const list = [...found.values()].filter((c) => !c.isArchived).slice(0, limit);
-  progress.stage = stage; progress.total = list.length; progress.done = 0;
-  const out = [];
-  for (const c of list) {
-    let messages = [];
-    try {
-      const m = await beeper(`/v1/chats/${c.id || c.chatID}/messages?limit=${msgs}`);
-      messages = (m.items || m || [])
-        .filter((x) => x.type !== 'REACTION' && !x.isHidden)
-        .map(normMsg)
-        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    } catch {}
-    out.push({
-      id: c.id || c.chatID,
-      title: c.title || c.name,
-      network: c.network || c.accountID,
-      type: c.type === 'group' ? 'group' : 'single',
-      isMuted: !!c.isMuted,
-      unread: c.unreadCount,
-      me: ME,
-      messages,
-    });
-    progress.done++;
-  }
-  return out;
-}
-const fetchInbox = fetchConversations;
-
 function avatarUrlFor(conversation) {
   if (conversation?.source === 'whatsapp-direct' || isWhatsAppChatId(conversation?.id)) {
     const version = conversation?.profilePhotoCheckedAt || conversation?.lastActivity || '';
@@ -291,32 +140,12 @@ async function transcriptFor(chatId, limit = 40) {
       .map((x) => `${x.isSender ? 'Me' : (x.senderName || 'Them')}: ${x.text || '[media]'}`)
       .join('\n');
   }
-  if (!BEEPER_ENABLED) throw new Error('This chat source is not connected.');
-  const m = await beeper(`/v1/chats/${chatId}/messages?limit=${limit}`);
-  const items = (m.items || m || []).slice().reverse();
-  return items.map((x) => `${x.isSender ? 'Me' : (x.senderName || 'Them')}: ${x.text || '[media]'}`).join('\n');
 }
 
 // --- full thread history ---
-// NOTE: Beeper's local API IGNORES ?limit and always returns 20 items per page.
-// The only way to get real history is to walk `oldestCursor` with
-// direction=before until hasMore is false. Do not "fix" this by raising limit.
-const PAGE_CAP = 200;             // max pages to walk (~4000 messages)
 const THREAD_TTL_MS = 5 * 60_000; // cache full transcripts briefly
 const threadCache = new Map();    // chatId -> { at, data }
 
-function stripHtml(s) {
-  return String(s || '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|li|ul|ol|div)>/gi, '\n')
-    .replace(/<li>/gi, '- ')
-    .replace(/<a\b[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gis, (m, href, txt) =>
-      href.startsWith('https://matrix.to') ? txt : (txt && txt !== href ? `${txt} (${href})` : href))
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
-    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-}
 const utcStamp = (iso) => {
   const d = new Date(iso), p = (n) => String(n).padStart(2, '0');
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
@@ -342,57 +171,7 @@ async function fullTranscript(chatId, { maxMessages = 4000 } = {}) {
     return data;
   }
 
-  if (!BEEPER_ENABLED) throw new Error('This chat source is not connected.');
-
-  const byId = new Map();
-  let cursor = null, pages = 0, truncated = false;
-  while (pages < PAGE_CAP) {
-    let path = `/v1/chats/${encodeURIComponent(chatId)}/messages?limit=100`;
-    if (cursor) path += `&cursor=${encodeURIComponent(cursor)}&direction=before`;
-    const j = await beeper(path);
-    for (const m of j.items || []) byId.set(m.id, m);
-    pages++;
-    if (byId.size >= maxMessages) { truncated = true; break; }
-    if (!j.hasMore || !j.oldestCursor || j.oldestCursor === cursor) break;
-    cursor = j.oldestCursor;
-  }
-
-  const all = [...byId.values()].sort((a, b) => Number(a.sortKey) - Number(b.sortKey));
-  const lines = [];
-  let count = 0, first = null, last = null;
-  for (const m of all) {
-    if (m.type === 'REACTION' || m.isHidden) continue; // folded onto their target below
-    const ts = m.timestamp;
-    if (!first || ts < first) first = ts;
-    if (!last || ts > last) last = ts;
-    let body = m.isDeleted ? '[deleted message]' : stripHtml(m.text);
-    const atts = m.attachments || [];
-    if (atts.length) {
-      const tags = atts.map((a) => `[${(a.type || m.type || 'file').toUpperCase()}${a.fileName ? ': ' + a.fileName : ''}]`).join(' ');
-      body = body ? `${tags} ${body}` : tags;
-    } else if (!body && m.type && m.type !== 'TEXT') body = `[${m.type}]`;
-    if (!body) continue;
-    if (m.reactions && m.reactions.length) {
-      body += `  (reactions: ${m.reactions.map((r) => r.reactionKey || 'emoji').join(', ')})`;
-    }
-    lines.push(`[${utcStamp(ts)}] ${m.isSender ? 'Me' : (m.senderName || 'Them')}: ${body.replace(/\n/g, '\n    ')}`);
-    count++;
-  }
-  const data = {
-    transcript: lines.join('\n'),
-    count,
-    truncated,
-    first: first ? utcStamp(first) : null,
-    last: last ? utcStamp(last) : null,
-    range: first && last ? `${utcStamp(first)} to ${utcStamp(last)} UTC` : '',
-  };
-  threadCache.set(chatId, { at: Date.now(), data });
-  return data;
-}
-
-async function searchChats(q) {
-  const r = await beeper(`/v1/chats/search?query=${encodeURIComponent(q)}&type=single&limit=6`);
-  return (r.items || []).map((c) => ({ id: c.id || c.chatID, who: c.title || c.name, network: c.network || c.accountID }));
+  throw new Error('This conversation is not from a connected source.');
 }
 
 // --- LLM backends (local subscriptions, Grok CLI, or Anthropic paygo) ---
@@ -904,8 +683,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
     if (DEMO) return { demo: true, items: SAMPLE, snapshot: trySnapshot(SAMPLE) };
     if (LLM === 'api' && !ANTHROPIC_KEY) throw new Error('LLM=api needs ANTHROPIC_API_KEY. For subscription access, choose Claude subscription or ChatGPT subscription in local Settings.');
     progress.stage = 'fetching chat list';
-    const [beeperChats, gmail] = await Promise.all([
-      BEEPER_ENABLED ? fetchInbox().catch((e) => { console.error('[beeper]', e.message || e); return []; }) : Promise.resolve([]),
+    const [gmail] = await Promise.all([
       EMAIL_ENABLED && gmailConfigured() ? fetchGmailInbox().catch((e) => ({ items: [], accounts: [], errors: [{ error: String(e.message || e) }] })) : Promise.resolve({ items: [], accounts: [], errors: [] }),
     ]);
     let waChats = [];
@@ -925,7 +703,7 @@ async function getRankedInbox({ scope = 'all' } = {}) {
       discordChats = d.items;
       discordError = d.error;
     }
-    let chats = [...beeperChats, ...gmail.items, ...waChats, ...discordChats];
+    let chats = [...gmail.items, ...waChats, ...discordChats];
     if (scope === 'whatsapp-triage') {
       const now = new Date();
       chats = chats.filter((chat) => {
@@ -1051,7 +829,6 @@ async function getRankedInbox({ scope = 'all' } = {}) {
     progress.stage = 'saving snapshot';
     const result = {
       demo: false, scope, llm: llmUsed, note: llmNote || undefined, items, eightyTwenty,
-      beeper: { configured: BEEPER_ENABLED, count: beeperChats.length },
       whatsappDirect: { enabled: WHATSAPP_DIRECT, count: waChats.length, ...(await whatsAppStatusForUi()) },
       gmail: { enabled: EMAIL_ENABLED, configured: EMAIL_ENABLED && gmailConfigured(), accounts: gmail.accounts, errors: gmail.errors },
       discord: { configured: discordConfigured(), count: discordChats.length, error: discordError },
@@ -1212,25 +989,12 @@ async function runEverything() {
     const errors = [];
 
     const wantArchive = EMAIL_ENABLED && process.env.SPRITE_ARCHIVE !== '0';
-    const [beeperRes, gmailRes, gmailArchRes] = await Promise.allSettled([
-      BEEPER_ENABLED ? fetchAllChats() : Promise.resolve([]),
+    const [gmailRes, gmailArchRes] = await Promise.allSettled([
       EMAIL_ENABLED && gmailConfigured() ? fetchGmailInbox({ all: true }) : Promise.resolve({ items: [], accounts: [], errors: [] }),
       EMAIL_ENABLED && gmailConfigured() && wantArchive ? fetchGmailArchive() : Promise.resolve({ items: [], accounts: [], errors: [] }),
     ]);
 
     let chats = [];
-    if (beeperRes.status === 'fulfilled') {
-      chats = beeperRes.value;
-      sources.beeper = {
-        count: chats.length,
-        active: chats.filter((c) => !c.isArchived).length,
-        archived: chats.archivedCount ?? 0,
-        archivedSkipped: true,
-      };
-    } else {
-      sources.beeper = { count: 0, error: String(beeperRes.reason?.message || beeperRes.reason) };
-      errors.push({ source: 'beeper', error: sources.beeper.error });
-    }
 
     let emails = [];
     if (gmailRes.status === 'fulfilled') {
@@ -1532,12 +1296,13 @@ async function getRadar({ force = false, limit = 400 } = {}) {
   if (!force && radarCache.data && Date.now() - radarCache.at < RADAR_TTL) {
     return { ...radarCache.data, cached: true };
   }
-  if (DEMO || !BEEPER_ENABLED) return { goneQuietOn: [], unansweredAsks: [], moneyThreads: [], missedCommitments: [], demo: true };
+  if (DEMO || !WHATSAPP_DIRECT) return { goneQuietOn: [], unansweredAsks: [], moneyThreads: [], missedCommitments: [], demo: true };
 
   progress.active = true;
   try {
-    // no inbox filter = every conversation across every network
-    const convs = await fetchConversations({ inbox: '', limit, msgs: 25, stage: 'scanning relationships' });
+    progress.stage = 'scanning relationships';
+    await ensureWhatsAppStarted();
+    const convs = listWhatsAppChats({ includeArchived: true }).slice(0, limit);
     progress.stage = 'building radar';
     const data = buildRadar(convs, new Date(), { quietAfterDays: 5 });
     const out = {
@@ -1553,7 +1318,6 @@ async function getRadar({ force = false, limit = 400 } = {}) {
 }
 
 // --- global ask: one question, searched across every chat on every network ---
-// Beeper's local API exposes a message search endpoint. We turn the question
 // into search terms, pull matching messages from ALL chats, and let the model
 // answer strictly from them, with citations.
 const STOPWORDS = new Set(['what','whats','when','where','who','whos','why','how','is','are','was','were','the','a','an','do','does','did','my','me','i','in','on','at','to','for','of','and','or','it','this','that','check','chat','from','with','about','tell','know','get','can','you','they','we','us','again','said','say','says','back']);
@@ -1563,25 +1327,6 @@ function keywordsFrom(q) {
       .filter((w) => w.length > 2 && !STOPWORDS.has(w))
   )].slice(0, 8);
 }
-function chatTitleMap(r) {
-  const m = new Map();
-  const cs = r.chats;
-  if (Array.isArray(cs)) for (const c of cs) m.set(c.id || c.chatID, c.title || c.name || '');
-  else if (cs && typeof cs === 'object') for (const [k, v] of Object.entries(cs)) m.set(k, (v && (v.title || v.name)) || '');
-  return m;
-}
-async function searchMessages(term, limit = 20) {
-  const r = await beeper(`/v1/messages/search?query=${encodeURIComponent(term)}&limit=${limit}`);
-  const titles = chatTitleMap(r);
-  return (r.items || []).map((m) => ({
-    id: m.id, chatId: m.chatID,
-    chat: titles.get(m.chatID) || '(unknown chat)',
-    who: m.isSender ? 'Me' : (m.senderName || 'Them'),
-    when: m.timestamp || '',
-    text: stripHtml(m.text || ''),
-  })).filter((m) => m.text);
-}
-
 function searchDirectWhatsAppMessages(term, limit = 20) {
   if (!WHATSAPP_DIRECT) return [];
   const needle = String(term || '').trim().toLowerCase();
@@ -1625,7 +1370,7 @@ async function handleAsk(body) {
   const question = String(body.question || '').trim();
   if (!question) return { error: 'Ask a question first.' };
   if (isLocalLlm()) return { error: offlineModelNotice({ hosted: HOSTED_WORKER }) };
-  if (DEMO || (!BEEPER_ENABLED && !WHATSAPP_DIRECT)) {
+  if (DEMO || !WHATSAPP_DIRECT) {
     return { answer: 'Connect at least one read-only message source first.', sources: [] };
   }
 
@@ -1633,9 +1378,6 @@ async function handleAsk(body) {
   const terms = [question, ...keywords].slice(0, 9);
   const seen = new Map();
   for (const t of terms) {
-    if (BEEPER_ENABLED) {
-      try { for (const m of await searchMessages(t, 20)) if (!seen.has(m.id)) seen.set(m.id, m); } catch {}
-    }
     for (const m of searchDirectWhatsAppMessages(t, 20)) {
       if (!seen.has(m.id)) seen.set(m.id, m);
     }
@@ -1843,8 +1585,13 @@ const server = createServer(async (req, res) => {
       return res.end(readFileSync(f, 'utf8'));
     }
     if (req.method === 'GET' && url.pathname === '/api/search') {
-      if (DEMO || !BEEPER_ENABLED) return send(res, 200, { items: [] });
-      return send(res, 200, { items: await searchChats(url.searchParams.get('q') || '') });
+      const q = String(url.searchParams.get('q') || '').trim().toLowerCase();
+      if (DEMO || !WHATSAPP_DIRECT || q.length < 2) return send(res, 200, { items: [] });
+      const items = listWhatsAppChats({ includeArchived: true })
+        .filter((chat) => String(chat.title || '').toLowerCase().includes(q))
+        .slice(0, 6)
+        .map((chat) => ({ id: chat.id, who: chat.title || 'WhatsApp chat', network: 'WhatsApp' }));
+      return send(res, 200, { items });
     }
     if (req.method === 'GET' && url.pathname === '/api/thread') {
       const id = url.searchParams.get('id') || '';
@@ -1929,14 +1676,7 @@ const server = createServer(async (req, res) => {
           source: 'whatsapp-direct',
         });
       }
-      if (!BEEPER_ENABLED) return send(res, 404, { error: 'This source is not connected.' });
-      const m = await beeper(`/v1/chats/${encodeURIComponent(id)}/messages?limit=${limit}`);
-      const messages = (m.items || m || [])
-        .filter((x) => x.type !== 'REACTION' && !x.isHidden)
-        .map(normMsg)
-        .filter((x) => x.text)
-        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      return send(res, 200, { messages, kind: 'chat' });
+      return send(res, 404, { error: 'This source is not connected.' });
     }
     if (req.method === 'GET' && url.pathname === '/api/wa/media') {
       const chatId = url.searchParams.get('chatId') || '';
@@ -2045,7 +1785,7 @@ server.on('error', (err) => {
 server.listen(PORT, () => {
   let mode = 'DEMO data';
   if (!DEMO) {
-    const sources = BEEPER_ENABLED ? 'direct WhatsApp + legacy adapter' : 'direct WhatsApp';
+    const sources = 'direct WhatsApp';
     if (isLocalLlm()) mode = `LIVE: ${sources} + local ranking`;
     else if (isClaudeLocalLlm()) mode = `LIVE: ${sources} + Claude subscription (${CLI_MODEL})`;
     else if (isCodexLocalLlm()) mode = `LIVE: ${sources} + ChatGPT subscription${CODEX_MODEL ? ` (${CODEX_MODEL})` : ''}`;

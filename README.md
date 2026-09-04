@@ -27,8 +27,7 @@ directory, not the install folder, so they survive upgrades.
 
 Email is disabled by default so it cannot enter the messaging sweep. Gmail can
 be restored later with `EMAIL_ENABLED=1`. Discord remains an optional direct
-adapter. A legacy local-API adapter is disabled unless `BEEPER_ENABLED=1` is
-set explicitly.
+adapter.
 
 The WhatsApp inbox is uncapped, excludes WhatsApp Archive, tracks archive and
 unarchive updates, and merges phone-number and LID identities into one thread.

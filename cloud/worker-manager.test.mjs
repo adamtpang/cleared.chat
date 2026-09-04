@@ -26,7 +26,6 @@ test('hosted workers use direct WhatsApp and disable unrelated sources', () => {
     baseEnv: { VOICE_TRANSCRIPTION: '1' },
   });
   assert.equal(env.WHATSAPP_DIRECT, '1');
-  assert.equal(env.BEEPER_ENABLED, '0');
   assert.equal(env.EMAIL_ENABLED, '0');
   assert.equal(env.CLEARED_HOSTED, '1');
   assert.equal(env.LLM, 'api');

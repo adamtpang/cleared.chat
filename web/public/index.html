@@ -2167,8 +2167,6 @@
       '<div class="srcstat"><span class="dot2 '+(ok?'ok':'bad')+'"></span>'
       + '<b>'+esc(name)+'</b><span>'+esc(detail)+'</span></div>';
     let h = '';
-    if(g.beeper && (g.beeper.count || g.beeper.error)) h += row('Beeper', !g.beeper.error,
-      g.beeper.error ? g.beeper.error : (g.beeper.active||0)+' active · '+(g.beeper.archived||0)+' archived');
     if(g.gmail && g.gmail.enabled){
       const accts = g.gmail.accounts || [];
       const errs = g.gmail.errors || [];
@@ -2665,11 +2663,6 @@
       html += msgs.length
         ? rows(msgs)
         : '<div class="empty-main">No chats match.</div>';
-      // Archived Beeper chats are deliberately not loaded: 770 extra fetches
-      // for a list nobody scrolls. Say so rather than pretend they are gone.
-      const skipped = (LAST_SOURCES && LAST_SOURCES.beeper && LAST_SOURCES.beeper.archived) || 0;
-      if(skipped) html += '<div class="snapnote" style="padding:var(--space-2x) 4px">'
-        + skipped + ' archived chats not loaded, for speed</div>';
     } else {
       const im = byAccount(inbox), fm = byAccount(filed);
       if(inbox.length) html += section('Sprite', inbox.length + ' threads · ' + im.size + ' accounts', acctBlocks(im), true);

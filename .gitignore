@@ -41,7 +41,7 @@ snapshots/
 .claude/settings.json
 web/inbox-triage-result.json
 web/export-eddie.mjs
-docs/beeper-careers-community.md
+docs/cleared-careers-community.md
 
 # our own WhatsApp session (Baileys pairing) — never commit
 web/wa-auth/

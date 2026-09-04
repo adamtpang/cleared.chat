@@ -53,8 +53,6 @@ export function workerEnvironment({ dataDir, userId, anthropicKey = '', baseEnv 
     DEMO: '0',
     WHATSAPP_DIRECT: '1',
     EMAIL_ENABLED: '0',
-    BEEPER_ENABLED: '0',
-    BEEPER_ACCESS_TOKEN: '',
     CLEARED_HOSTED: '1',
     LICENSE_SECRET: '',
     WA_DATA_DIR: paths.whatsapp,

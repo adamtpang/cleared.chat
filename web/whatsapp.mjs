@@ -1,6 +1,6 @@
 // cleared.chat's own WhatsApp connection, direct multi-device pairing via
-// Baileys, no Beeper Desktop in the loop. This is the "our own UI" path:
-// we own the QR, we own the session, we own the ban-risk trade-off.
+// Baileys, with no third-party bridge in the loop. This is the "our own UI"
+// path: we own the QR, we own the session, we own the ban-risk trade-off.
 //
 // Auth session lives in web/wa-auth/ (gitignored). Pair once, reconnects
 // silently after that as long as the files are there.
