@@ -2753,8 +2753,12 @@
       const unreadCount = Math.max(0, Number(d.unreadCount ?? it.unread) || 0);
       $('#chatbody').innerHTML = conversationView(it, msgs, unreadCount, triaged);
       const body = $('#chatbody');
-      void hydrateMessageImages(body);
-      body.scrollTop = FOCUS_MODE || unreadCount > 0 ? 0 : body.scrollHeight;
+      // Open at the latest message so nothing needs scrolling on arrival. The
+      // unread divider stays in the pane for anyone who scrolls up. Focus mode
+      // keeps the AI summary and next action at the top instead.
+      const scrollToLatest = () => { if(openId === id && !FOCUS_MODE) body.scrollTop = body.scrollHeight; };
+      hydrateMessageImages(body).then(scrollToLatest, scrollToLatest);
+      body.scrollTop = FOCUS_MODE ? 0 : body.scrollHeight;
     }catch(e){
       if(openId !== id) return;
       $('#chatbody').innerHTML = '<div class="chatempty">Could not load: '+esc(String(e.message||e))+'</div>';

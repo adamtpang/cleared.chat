@@ -95,8 +95,9 @@ restart; unavailable media asks Adam to keep WhatsApp connected and retry.
 
 When a conversation has unread messages, the chat pane collapses older read
 history behind `Show earlier messages`, places an unread divider at WhatsApp's
-count-derived boundary, and starts at the first unread message instead of the
-bottom. After `Triage inbox`, the same pane shows the AI context summary, next
+count-derived boundary, and opens scrolled to the latest message so nothing
+needs scrolling on arrival; the divider stays reachable by scrolling up. Focus
+mode keeps the summary and next action at the top instead. After `Triage inbox`, the same pane shows the AI context summary, next
 action, every task-first prerequisite or clarifying question, and loads the
 editable unsent draft into the composer. Triage covers actionable unread chats
 plus other reply-owed WhatsApp conversations and reads up to 30 recent messages
