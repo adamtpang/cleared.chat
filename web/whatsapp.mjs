@@ -1608,9 +1608,20 @@ export async function getProfilePhoto(chatId) {
       });
       scheduleSave();
       return imgUrl || null;
-    } catch {
-      upsertChat(jid, { imgUrl: null, profilePhotoCheckedAt: new Date().toISOString() });
-      scheduleSave();
+    } catch (error) {
+      // Only "this chat has no photo" is a real answer worth caching for six
+      // hours. A timeout, rate limit, or a group whose metadata has not synced
+      // yet is a transient miss, and caching it hides the photo for the rest of
+      // the day. Leave those uncached so the next request retries.
+      const reason = String(error?.data || error?.output?.statusCode || error?.message || '');
+      const noPhoto = /404|item-not-found|not-found/i.test(reason);
+      if (process.env.WA_PHOTO_DEBUG === '1') {
+        console.log('[photo]', jid, '| reason:', reason, '| noPhoto:', noPhoto, '| raw:', String(error?.message || error));
+      }
+      if (noPhoto) {
+        upsertChat(jid, { imgUrl: null, profilePhotoCheckedAt: new Date().toISOString() });
+        scheduleSave();
+      }
       return null;
     }
   }).finally(() => profilePhotoRequests.delete(jid));
@@ -1618,7 +1629,7 @@ export async function getProfilePhoto(chatId) {
   return request;
 }
 
-export async function hydrateProfilePhotos({ limit = 48 } = {}) {
+export async function hydrateProfilePhotos({ limit = 160 } = {}) {
   if (!chatsById.size) loadStore();
   if (!sock || status !== 'open') return { checked: 0, found: 0 };
   const candidates = [...chatsById.values()]
