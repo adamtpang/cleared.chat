@@ -106,18 +106,20 @@ export function clerkAuthPage({ publishableKey, frontendApi, error = '', callbac
 
 export function accountPage({ user, hasUserKey, hasPlatformKey, message = '', error = '' }) {
   const aiReady = hasUserKey || hasPlatformKey;
+  // Keep AI connection recovery in Account, outside the daily inbox.
+  const showAiSettings = true;
   return shell('Account', `
   <header class="top"><a class="brand" href="/"><span class="dot"></span>cleared.chat</a><div class="nav"><a href="/">Inbox</a><form method="post" action="/logout"><button type="submit">Sign out</button></form></div></header>
   <main class="main"><section class="panel account">
     <div><h1>Account</h1><p>${esc(user.email)}</p></div>
     ${message ? `<div class="status"><i></i>${esc(message)}</div>` : ''}
     ${error ? `<div class="error">${esc(error)}</div>` : ''}
-    <div class="row">
+    ${showAiSettings ? `<div class="row">
       <div class="status" style="color:${aiReady ? 'var(--brand)' : 'var(--muted)'}"><i></i>${aiReady ? 'AI assistant ready' : 'AI assistant needs a key'}</div>
       <p>${hasPlatformKey ? 'AI usage is provided by cleared.chat for this beta.' : 'Add your Anthropic API key for ranking and drafting. It is encrypted before storage.'}</p>
       ${hasPlatformKey ? '' : `<form method="post" action="/account/ai-key"><div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" name="apiKey" type="password" autocomplete="off" placeholder="sk-ant-..."></div><button class="primary" type="submit">${hasUserKey ? 'Replace key' : 'Save key'}</button></form>`}
       ${hasUserKey ? `<form method="post" action="/account/ai-key/delete" style="margin-top:10px"><button class="ghost" type="submit">Remove saved key</button></form>` : ''}
-    </div>
+    </div>` : ''}
     <div class="row"><p>WhatsApp pairing and connection status are managed inside Inbox Settings.</p><div class="actions"><a class="primary" style="display:inline-block;padding:11px 16px;border-radius:6px;background:var(--brand);color:#fff;font-weight:800" href="/">Open inbox</a></div></div>
   </section></main>`);
 }

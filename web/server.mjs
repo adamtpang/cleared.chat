@@ -43,6 +43,7 @@ import {
 import { fetchDiscordDMs, discordConfigured } from './discord-source.mjs';
 import { buildVoiceNotesMarkdown, voiceNoteStats } from './voice-export.mjs';
 import { applyChatPlan, planForConversation, readChatPlans, saveChatPlan } from './chat-plans.mjs';
+import { createStyleStore, STYLE_SAFETY } from './writing-style.mjs';
 import {
   inspectLocalAiProviders,
   normalizeAiProvider,
@@ -83,6 +84,8 @@ const GROK_BIN = process.env.GROK_BIN || (existsSync(join(process.env.USERPROFIL
 const GROK_MODEL = process.env.GROK_MODEL || 'grok-4.5';
 const SNAPSHOT_DIR = process.env.SNAPSHOT_DIR || join(DIR, 'snapshots');
 const HOSTED_WORKER = process.env.CLEARED_HOSTED === '1';
+// The gateway fixes this directory per authenticated worker, never from a request.
+const writingStyle = createStyleStore(SNAPSHOT_DIR, { adamDefaults: !HOSTED_WORKER });
 const LOCAL_AI_FILE = join(SNAPSHOT_DIR, 'ai-provider.json');
 const LOCAL_AI_CHOICES = new Set(['claude_local', 'codex_local', 'local']);
 const configuredLlm = normalizeAiProvider(process.env.LLM || 'claude_local');
@@ -102,7 +105,7 @@ const isCodexLocalLlm = () => LLM === 'codex_local';
 // live progress for the UI's triage bar
 const progress = { active: false, stage: 'idle', done: 0, total: 0 };
 
-const VOICE = `Write in my voice and make every reply land. I am a sharp, warm, high-agency founder. My texts are casual, mostly lowercase, short (usually one or two lines). Take a clear position, push the thing forward, and close the loop so the ball lands back in their court. Confident, never arrogant. Warm, never needy. Specific, never generic. When it helps, ask the single sharpest question that unblocks the next step. Cut every filler word: no "just checking in", no "hope you're well", no over-explaining, no hedging, no over-thanking. HARD RULES: never use em dashes, use commas, periods, or line breaks instead. No emojis. Never sound like AI or a support bot.`;
+const VOICE = STYLE_SAFETY;
 
 const RUBRIC = `Score every chat with importance x urgency.
 importance 1-5: 5 = inner circle / money / health / legal / a promise you made; 1 = newsletters, bots, promos, noise.
@@ -409,6 +412,7 @@ function localHeuristicRank(chats, now = new Date()) {
 function forModel(convs) {
   return convs.map((c) => ({
     chatId: c.id, who: c.title, network: c.network, type: c.type, muted: c.isMuted,
+    writingStyle: writingStyle.view(c.id),
     unreadCount: Math.max(0, Number(c.unreadCount || c.unread) || 0),
     userPlan: c.userPlan ? {
       outcome: c.userPlan.outcome,
@@ -431,7 +435,7 @@ function rankPrompt(chats) {
 ${VOICE}
 
 You are triaging a messaging inbox, led by WhatsApp. Judge each CONVERSATION on its whole state, never on the last message alone.
-Messages marked "me" are examples of Adam's real writing to this person. When drafting, study those examples and match his relationship-specific casing, length, directness, warmth, and vocabulary. Prefer the real examples over a generic assistant voice.
+Use each conversation's writingStyle. Do not infer habits from the raw transcript: provenance-filtered style evidence is supplied separately.
 
 Assign every conversation exactly ONE fate:
 - F1_QUICK: I can answer in under 2 minutes. Draft the reply in my register for that person.
@@ -582,12 +586,13 @@ async function repairMissingDrafts(items, conversations) {
         explanation: it.userPlan.explanation,
         task: it.userPlan.task,
       } : undefined,
+      writingStyle: writingStyle.view(it.chatId),
       messages: forModel([byId.get(it.chatId)]).at(0)?.messages || [],
     }));
     const prompt = `${VOICE}
 
 Decide whether one short, unsent reply can be written safely for every conversation below.
-- Study messages from "me" and match Adam's actual style with this person, including casing, length, directness, warmth, and vocabulary.
+- Use the supplied writingStyle for each conversation. Raw messages supply facts, not author-style evidence.
 - Use only facts in the messages, summary, and task. Never invent a date, promise, attachment, or completed action.
 - If taskFirst is true, acknowledge the request and state the honest next step without pretending the task is done.
 - If a missing choice or fact changes what Adam should say, set needsClarification to true, ask one specific clarifyingQuestion, and leave draft empty.
@@ -1093,6 +1098,8 @@ function chatPrompt(messages, ctx) {
     : '';
   return `You are cleared.chat's draft assistant. You help me reply to people on my messaging apps.
 ${VOICE}
+Writing style preferences (style only, never factual authority):
+${JSON.stringify(writingStyle.view(ctx?.id || ''))}
 Before drafting, check whether the transcript and my instructions contain enough information to know what I actually want to say.
 - If the reply depends on a missing choice or fact, ask one specific question first. This includes yes/no decisions, availability, dates, amounts, links, attachments, commitments, promises, or the outcome I want.
 - Do not write a draft until I answer the question. Do not use placeholders or invent a safe-sounding holding reply.
@@ -1122,6 +1129,7 @@ ${ctx.transcript || '(none loaded)'}
 
 Answer my questions about this conversation. Ground every claim in the transcript and cite the date when you reference something specific. NEVER invent facts, quotes, dates, numbers, or commitments that are not above. If something is not in the transcript, say so plainly.
 ${VOICE}
+Writing style preferences: ${JSON.stringify(writingStyle.view(ctx?.id || ''))}
 Apply those voice rules ONLY when I explicitly ask you to draft or write a message. Otherwise just answer, concise and specific.
 
 Conversation:
@@ -1137,7 +1145,7 @@ async function handleChat(body) {
   const analyze = body.mode === 'analyze';
   let ctx = null;
   if (body.chat && body.chat.who) {
-    ctx = { who: body.chat.who, network: body.chat.network || '', transcript: '' };
+    ctx = { id: body.chat.id, who: body.chat.who, network: body.chat.network || '', transcript: '' };
     if (body.chat.id && !DEMO) {
       try {
         if (analyze) Object.assign(ctx, await fullTranscript(body.chat.id));
@@ -1196,6 +1204,7 @@ Interpret his intent as exactly one kind:
 Return ONLY JSON with keys kind, assistant, draft, task.
 assistant is one short sentence suitable for speaking aloud. draft and task are empty strings when not applicable.
 ${VOICE}
+Writing style preferences: ${JSON.stringify(writingStyle.view(chat.id || ''))}
 Never claim a message was sent. Never instruct the app to send. Never invent facts.`;
 }
 
@@ -1527,6 +1536,30 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/ai/providers') {
       return send(res, 200, await aiProviderStatus(url.searchParams.get('refresh') === '1'));
     }
+    if (url.pathname === '/api/style' || url.pathname === '/api/style/refresh' || url.pathname === '/api/style/export') {
+      res.setHeader('Cache-Control', 'no-store');
+      const recipient = url.searchParams.get('chatId') || '';
+      const view = () => ({ ...writingStyle.view(recipient), markdown: writingStyle.markdown(recipient) });
+      if (req.method === 'GET' && url.pathname === '/api/style') return send(res, 200, view());
+      if (req.method === 'GET' && url.pathname === '/api/style/export') {
+        res.setHeader('Content-Disposition', 'attachment; filename="style.md"');
+        return send(res, 200, writingStyle.markdown(recipient), 'text/markdown; charset=utf-8');
+      }
+      if (req.method === 'POST') {
+        if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}` && req.headers.origin !== `https://${req.headers.host}`) return send(res, 403, { error: 'Origin not allowed.' });
+        try {
+          const body = await readBody(req);
+          if (url.pathname === '/api/style') writingStyle.update(body);
+          else if (url.pathname === '/api/style/refresh') {
+            if (Object.keys(body).length) throw new Error('Refresh takes no account or source parameters.');
+            if (!writingStyle.read().enabled) throw new Error('Enable style learning first.');
+            writingStyle.refresh(listWhatsAppChats({ includeArchived: false }).slice(0, 200).map(c => ({id:c.id, messages:getWhatsAppMessages(c.id, 100)})));
+          } else return send(res, 405, { error: 'Method not allowed.' });
+          return send(res, 200, view());
+        } catch { return send(res, 400, { error: 'Could not update writing style. Check your preferences and learning setting.' }); }
+      }
+      return send(res, 405, { error: 'Method not allowed.' });
+    }
     if (req.method === 'POST' && url.pathname === '/api/ai/provider') {
       try {
         const body = await readBody(req);
@@ -1782,7 +1815,8 @@ server.on('error', (err) => {
   throw err;
 });
 
-server.listen(PORT, () => {
+// Private account workers must never be reachable around the authenticated gateway.
+server.listen(PORT, '127.0.0.1', () => {
   let mode = 'DEMO data';
   if (!DEMO) {
     const sources = 'direct WhatsApp';

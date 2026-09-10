@@ -26,6 +26,7 @@ import { dirname, join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import pino from 'pino';
 import { transcribeVoiceBuffer, transcriptionStatus } from './voice-transcriber.mjs';
+import { styleProvenance } from './writing-style.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 // The Aug 10 session logged out (401) server-side; rather than delete that
@@ -1075,6 +1076,7 @@ function ingestProtoMessages(msgs) {
     const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp) * 1000).toISOString() : new Date().toISOString();
     const stored = appendMessage(jid, {
       key: m.key?.id,
+      ...styleProvenance(m, contentOf(m)),
       isSender: !!m.key?.fromMe,
       participant: m.key?.participant || null,
       senderName: m.pushName || jid.split('@')[0],
@@ -1093,6 +1095,7 @@ function ingestProtoMessages(msgs) {
         transcriptionStatus: 'pending',
       } : {}),
     });
+    Object.assign(stored, styleProvenance(m, contentOf(m)));
     // A reconnect can re-deliver a richer media proto for a placeholder that
     // was already in the local store. Merge the metadata before caching.
     if (image) {

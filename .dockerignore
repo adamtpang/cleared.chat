@@ -19,5 +19,8 @@ web/wa-auth*
 web/wa-store.json
 web/contact-aliases.json
 web/snapshots
+**/writing-style.json
+**/writing-style.json.tmp
+**/style.md
 web/inbox-triage-result.json
 web/.license.json

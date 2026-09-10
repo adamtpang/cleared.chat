@@ -4,6 +4,33 @@ Guidance for Claude Code working in this repo.
 
 ## What this is
 
+September 10: AI connection recovery is restored in Settings and hosted Account.
+Missing AI opens the appropriate setup surface, not a dead-end alert. Keep
+provider controls out of the chat toolbar. Hosted workers cannot use local CLI
+subscriptions. This supersedes the September 8 setup-hiding instruction below.
+
+September 9 design revision: Light is the default, including old System
+preferences. Explicit Dark is retained. The app uses white/near-black neutral
+tokens, a bordered two-column grid and no accent picker. Keep real contact
+photos in color. See the latest revision in docs/design-system.md.
+
+Writing style lives in each worker's private snapshot directory as
+`writing-style.json`, with editable preferences and a Markdown view/export at
+Settings > Writing style. Learning is off until the user opts in and explicitly
+updates from history. Only provenance-verified sent text is eligible; quoted,
+forwarded, generated/assistant and legacy unverified records are excluded.
+Inference persists aggregates, never source text. At least 12 eligible messages
+are needed for inferred habits; explicit preferences always override them.
+Reset deletes inferred data and disables learning, retaining user preferences.
+Local Adam defaults do not apply to hosted accounts. Draft and triage prompts
+consume these profiles with factual-preservation and untrusted-history rules.
+
+September 8 UI revision: AI model/provider setup is temporarily commented out
+in the inbox and feature-disabled on the hosted Account page. Existing provider
+integration and credentials remain intact. Do not restore setup controls without
+Adam's request. The app now uses neutral surfaces, no chat wallpaper, and an
+initials fallback that stays visible until a photo successfully loads.
+
 cleared.chat is a local-first messaging client with Electron, local browser,
 and hosted browser modes. It connects directly to WhatsApp through Baileys,
 restores a saved linked-device session on startup, ranks open loops by
@@ -94,35 +121,28 @@ restart; unavailable media asks Adam to keep WhatsApp connected and retry.
 
 When a conversation has unread messages, the chat pane collapses older read
 history behind `Show earlier messages`, places an unread divider at WhatsApp's
-count-derived boundary, and opens scrolled to the latest message so nothing
-needs scrolling on arrival; the divider stays reachable by scrolling up. Focus
-mode keeps the summary and next action at the top instead. After `Triage inbox`, the same pane shows the AI context summary, next
-action, every task-first prerequisite or clarifying question, and loads the
+count-derived boundary, and opens at the first unread message. After `Triage`,
+one quiet line above the composer shows the next action, prerequisites, or
+clarifying question, and loads the
 editable unsent draft into the composer. Triage covers actionable unread chats
 plus other reply-owed WhatsApp conversations and reads up to 30 recent messages
 per chat; interactive drafting reads up to 40. Drafting studies Adam's sent
 messages in that conversation and matches the relationship-specific casing,
 length, directness, warmth, and vocabulary.
 
-After triage, the app enters Focus mode by default. Focus mode hides the inbox
-and presents one ranked actionable conversation at a time with a `Priority X of
-Y` counter, ordered prerequisite tasks, context summary, and editable suggested
-reply. Previous and Next move within the ranked queue without changing WhatsApp.
-`Cleared` stores only the private conversation version and advances to the next
-priority. `Show inbox` returns to the complete ranked list. The preference is
-restored with the latest saved triage after reload.
+The active surface follows `SIMPLICITY-BLUEPRINT.md`: one Chats sidebar and one
+conversation, with no navigation rail, Focus mode, or companion assistant pane.
+Triage switches the same sidebar to its Priority filter without hiding it.
+`Cleared` stores only the private conversation version, updates the remaining
+count, and opens the next chat. On mobile, Back returns to the same list.
 
-A compact AI-output warning appears only for a stale offline snapshot, failed
-run, or missing drafts. A current successful triage adds no persistent banner.
-Running triage replaces any warning with a global progress band that remains
-visible in Inbox and Focus. The band names each stage, explains what is
-happening, reports completed conversation counts, elapsed time, and percentage,
-and keeps failures visible.
+Triage progress stays inside the sidebar, includes stage, elapsed time and
+percentage, and disappears after success. Actual failures stay visible.
+There is no persistent stale-triage or missing-draft warning. A snapshot for an
+older conversation version cannot seed a new draft. Missing AI configuration
+is handled by the composer action and Settings, not a banner over the chat.
 
-The desktop shell follows WhatsApp's familiar three-column hierarchy: a narrow
-Cleared navigation rail, a Chats list with search and filter pills, and one
-flexible conversation pane. `Triage inbox` lives in the Chats header. AI
-priorities and Focus are additive rail destinations, not dashboard panels.
+`Triage` lives in the Chats header.
 Manual data controls, account management, density, theme, and text sizing live
 in Settings. A conversation header shows only `Cleared` and one overflow menu
 for naming, transcript export, full export, and thread questions. The composer
@@ -132,15 +152,14 @@ flow.
 The interface follows the Clearspace system in `docs/design-system.md` and the
 active parity contract in `FEATURE-PARITY.md`: neutral messaging surfaces,
 green reserved for progress and confirmed actions, dense contact-first rows,
-one visible navigation layer in Focus, and a responsive split view that becomes
+one visible navigation layer, and a responsive split view that becomes
 one surface on narrow screens. The layout may use learned WhatsApp interaction
 patterns, but never WhatsApp trademarks or proprietary assets. Do not restore
 the old purple or cyan-tinted product palettes.
 
 Daily rows expose only recognition-critical information. Unread shows contact,
-preview, time, and count. Priority shows contact, next action, and rank. Focus
-opens at the next action with one composer, while private plan details stay
-behind progressive disclosure. Do not restore per-row completion buttons,
+preview, time, and count. Priority shows contact, next action, and rank. The
+conversation contains messages, not planning cards. Do not restore per-row completion buttons,
 scores, source labels, duplicate draft actions, or successful-run banners.
 
 WhatsApp protocol, key-distribution, history-sync, and app-state events are
@@ -179,20 +198,17 @@ media through authenticated fetches and short-lived object URLs, never a public
 WhatsApp CDN URL. A small message thumbnail is used only when the full image is
 no longer available from WhatsApp.
 
-Focus mode is the daily inbox-clearing surface. It includes every active unread
-chat plus older conversations that still look actionable. Each conversation has
-a private, versioned plan with Adam's explanation for why it is still open, an
-explicit outcome (`reply`, `task`, `waiting`, or `no-reply`), and an optional
-task that must happen first. The saved explanation is model context for later
-ranking and drafting. A newer message makes the action choice stale and requires
-review. Saving a plan never sends, marks read, archives, reacts, or clears the
-conversation; Adam still presses Cleared or confirms a reviewed reply himself.
+Private versioned plans remain available as model context, but their editors
+are not part of the daily chat surface. Task prerequisites appear in the one
+next-action line above the reply composer.
 
-The Focus interface is deliberately one linear sequence: inspect the next
-action, complete any prerequisite, then draft. The Priority sidebar has one
-open-loop list, not a second summary that duplicates its top rows. The plan
-editor is collapsed disclosure until Adam opens it, while the current next
-action remains visible. Task prerequisites appear before the one reply composer.
+Edited drafts survive switching chats and rerunning triage within the page.
+Late AI responses belong to the requesting chat and cannot replace newer human
+edits. Clarifying questions use the same composer in a visibly separate
+`Use answer` mode. Enter in that mode supplies private model context, never a
+reply review. Normal reply mode still opens the one human-only review modal.
+Successive answers remain in the chat's in-memory drafting context. This state
+is not written to shared browser storage and does not survive closing the page.
 Hosted AI drafting requires either the platform AI key or the encrypted
 Anthropic key saved under Account; offline ranking must say clearly that drafts
 are unavailable instead of returning a fake draft. Thread questions, composer

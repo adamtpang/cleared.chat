@@ -2,6 +2,35 @@
 
 ## Direction
 
+### Active revision: September 9, 2026
+
+White is the default, with near-black text and neutral gray borders. Dark mode
+is an explicit Settings choice: near-black surfaces and near-white text. Legacy
+System preferences resolve to Light; explicitly saved Dark remains Dark. Accent
+selection is removed from Settings. Photos retain their original colors;
+fallback avatars, buttons, unread counts, tabs and chat bubbles are neutral.
+
+The grid is a 320-400px desktop sidebar and a flexible conversation, with aligned
+64px headers, 1px separators, 4px spacing increments and 6-8px control radii.
+Mobile retains list-or-conversation navigation. Semantic error/status colors
+remain available, but do not tint the ordinary messaging surface.
+
+This uses shadcn's semantic CSS token conventions, not its React components:
+https://ui.shadcn.com/docs/theming . Do not introduce a framework migration to
+change visual styling. Earlier palette descriptions below are historical.
+
+### Active revision: September 8, 2026
+
+The current app uses a persistent two-pane layout, not the legacy rail or Focus
+layout described below. Neutral gray list and conversation surfaces replace
+green-tinted backgrounds. No wallpaper or bubble shadows. Message typography is
+14px with 1.55 line height; composer corners are 8px. Green remains an action and
+unread signal, not a canvas color. Failed photos immediately reveal initials.
+
+AI model configuration is temporarily hidden in local Settings and hosted
+Account. Keep provider integration and saved credentials intact. Existing
+configured AI can still draft; unavailable AI must not offer a dead setup link.
+
 Cleared is a calm, high-agency messenger. It should feel familiar enough to
 use without instruction and opinionated enough to move one open loop at a time.
 The interface is neutral first. Green is reserved for progress, selection, and

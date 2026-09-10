@@ -1,62 +1,73 @@
 # Simplicity blueprint - the radically simple version of cleared.chat
 
 One sentence: if cleared.chat did exactly one thing perfectly, Adam could open
-the top-priority unreplied chat, approve a strong reply, and leave with that
-relationship loop ready to close manually.
-
-```mermaid
-flowchart LR
-  A[Adam opens cleared.chat] --> B[Run triage]
-  B --> C[See the next chat]
-  C --> D[Edit the draft]
-  D --> E[Confirm and copy]
-  E --> F[Next priority chat]
-  X[Relationship radar]:::cut
-  Y[Cross-inbox question search]:::cut
-  Z[Scheduling and fate controls]:::cut
-  classDef cut fill:#f4f4f7,stroke:#c9c9d3,color:#808080
-```
+one familiar WhatsApp-style inbox, see the chats he owes in priority order, and
+clear them one by one with an editable draft and one intentional send
+confirmation.
 
 ## The one user
 
-Adam, starting each day with too many cross-network conversations and needing a
-fast, trustworthy way to close the next relationship loop.
+Adam, with a linked personal WhatsApp account and an overloaded unread inbox he
+wants to clear today without learning a second messaging interface.
 
 ## The core loop
 
-1. Run triage.
-2. Open the highest-priority chat.
-3. Read the context and edit the suggested reply.
-4. Confirm and copy the exact text, then send it manually in WhatsApp.
-5. Move to the next chat.
+1. Open cleared.chat to the complete Unread sidebar.
+2. Press Triage once and keep the same sidebar, now ordered by priority.
+3. Open the first chat and read only its unread messages plus one quiet next action.
+4. Edit the suggested reply in the normal composer and confirm the exact send.
+5. Press Cleared and continue to the next chat while the visible count falls.
 
-Done when: Adam can process the next reply without navigating a dashboard or
-deciding what to do first.
+Done when: from a real linked account, Adam clears five chats in priority order
+without the sidebar disappearing, opening a dashboard, or seeing a stale-state
+warning.
 
 ## The minimum effective feature set
 
 Every line here survived the deletion test: remove it and the core loop breaks.
 
-- Ranked action queue - without it, Adam must decide who to handle first.
-- Context and editable draft for the selected chat - without it, Adam cannot make a safe, useful reply.
-- Explicit exact-text copy confirmation - without it, the product violates Adam's approval rule.
-- Next-chat progression - without it, the daily inbox-zero loop stops after one reply.
+- Complete WhatsApp-style Unread sidebar with names, photos, previews, times, and counts - without it, Adam cannot trust that the sweep covers his real inbox.
+- Triage in the existing sidebar - without it, Adam must choose who matters first or enter a separate workflow.
+- Plain selected-chat transcript with unread boundary, media, and voice transcripts - without it, Adam cannot understand what he is answering.
+- One quiet next action and one editable draft in the normal composer - without them, Cleared does not reduce the work of deciding and writing.
+- One exact-recipient confirmation before sending - without it, Adam cannot safely close the loop inside Cleared.
+- Cleared and automatic next-chat progression with a remaining count - without them, the inbox-zero loop has no visible finish line.
 
 ## What this deliberately is NOT (the cut list)
 
-- Relationship radar - NOT YET (restore only when it demonstrably produces a better first reply than the ranked queue).
-- Cross-inbox question search - NOT YET (restore only when daily triage is reliably completed and users ask for research, not reply help).
-- Fate reassignment, calendar blocking, and archive controls in the primary view - NOT YET (restore only after the reply loop is used daily without friction).
-- Dashboard counts, 80/20 hero panel, and multiple folders - NEVER (they duplicate the decision the ranked queue already made).
-- Autonomous sending - NEVER (it contradicts Adam's explicit approval rule).
+- Focus mode that hides the sidebar - NEVER (it removes the inbox context Adam explicitly wants to keep).
+- Separate AI Priority destination and navigation rail - NEVER (triage belongs in the existing chat list).
+- Persistent stale-triage or missing-draft banners - NEVER (an empty draft can offer Draft without adding warning chrome).
+- Next-action cards, Decide/Do/Draft panels, and expanded plan editors in the message stream - NEVER (one action line is enough).
+- Standalone draft-assistant panel beside the real chat - NEVER (AI belongs in the composer, not a competing conversation).
+- Persistent buttons for reactions, forwarding, exports, and transcript tools - NEVER (keep these contextual in message or overflow menus).
+- Voice-guided triage - NOT YET (restore only after five complete daily text sweeps prove that voice makes the loop faster).
+- Email, Discord, and legacy Beeper sources - NOT YET (restore only after WhatsApp reaches reliable daily zero for two weeks).
+- Calendar scheduling and manual fate controls - NOT YET (restore only when a measured share of blocked replies needs structured scheduling).
+- Additional dashboard counts, summary folders, and 80/20 panels - NEVER (the ordered sidebar and remaining count already answer what is next).
 
 ## The "if it worked" bar
 
-With a real WhatsApp inbox loaded, Adam can prepare or intentionally skip the
-next five priority replies in order without leaving the main workspace.
+Adam opens `app.cleared.chat`, presses Triage, and clears five real WhatsApp
+conversations without the sidebar ever disappearing or any interface competing
+with the selected chat.
 
-## Blueprint notes (2026-08-17)
+## Blueprint notes (2026-09-03)
 
-Built from the live Electron UI, `web/public/index.html`, and the existing
-importance-times-urgency triage flow. This pass cuts dashboard surfaces so the
-interface becomes a single decision and writing workspace.
+This RE-CUT uses the shipped `web/public/index.html`, current runtime contract,
+Adam's direct production feedback, and the earlier 2026-08-17 blueprint. Scope
+crept back through Focus mode, a separate AI rail destination, stale-output
+banners, planning cards, voice controls, and a second assistant conversation.
+This pass cuts those surfaces from the daily loop and returns Cleared to one
+familiar inbox with AI embedded only where it changes the next action or draft.
+The one user remains Adam, which matches the prior blueprint and the current
+first-person workflow.
+
+## Implementation notes (2026-09-05)
+
+Implemented in the current `cleared.chat` checkout, preserving newer sticker,
+accent, and pairing improvements. Desktop keeps the sidebar through triage.
+Mobile has one list or one chat with Back navigation. Draft edits remain tied
+to their contact, and clarification answers cannot enter reply review.
+Validation: 82 automated tests; synthetic desktop and mobile browser checks.
+The five-real-chat completion bar still requires Adam's manual daily sweep.

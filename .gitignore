@@ -31,6 +31,9 @@ desktop/*-voice.png
 
 # triage snapshots (private inbox data)
 snapshots/
+writing-style.json
+writing-style.json.tmp
+style.md
 
 # Live UI verification can contain private chat content
 .brand-preview/

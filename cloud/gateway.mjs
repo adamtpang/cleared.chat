@@ -397,6 +397,9 @@ export function createGateway(options = {}) {
         return send(res, 200, JSON.stringify({ email: user.email, aiReady: platformAi || accounts.hasSecret(user.id, 'anthropic_api_key') }), 'application/json; charset=utf-8');
       }
       if (url.pathname.startsWith('/api/')) {
+        if (req.method === 'POST' && url.pathname.startsWith('/api/style') && !sameOrigin(req)) {
+          return send(res, 403, JSON.stringify({ error: 'Forbidden' }), 'application/json');
+        }
         const worker = await workers.get(user.id);
         return proxyToWorker(req, res, worker);
       }
