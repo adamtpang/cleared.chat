@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>About cleared.chat: who builds the priority inbox</title>
+<meta name="description" content="Who builds and operates cleared.chat, how the WhatsApp priority inbox works, and how to contact Adam Pang." />
+<meta name="theme-color" content="#087D86" />
+<link rel="canonical" href="https://cleared.chat/about" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="About cleared.chat: who builds the priority inbox" />
+<meta property="og:description" content="Who builds and operates cleared.chat, how the WhatsApp priority inbox works, and how to contact Adam Pang." />
+<meta property="og:url" content="https://cleared.chat/about" />
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+<style>
+  :root{--bg:#F4F9F9;--soft:#FFFFFF;--ink:#152124;--muted:#53696D;--line:#D3E1E2;--brand:#087D86}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:0 20px}
+  a{color:var(--brand)}
+  nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:24px 0;flex-wrap:wrap}
+  .brand{font-weight:800;font-size:18px;color:var(--ink);text-decoration:none;display:flex;align-items:center;gap:9px;min-height:44px}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--brand)}
+  .links{display:flex;gap:18px;font-size:14px;font-weight:500}
+  .links a{color:var(--muted);text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+  main{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:36px 32px;margin:12px 0 40px}
+  h1{font-size:36px;line-height:1.1;font-weight:800;margin-bottom:10px}
+  h2{font-size:21px;font-weight:800;margin:30px 0 8px}
+  p,li{color:var(--muted);font-size:16px}
+  p{margin-top:10px}
+  ul{margin:10px 0 0 22px}
+  li{margin-top:6px}
+  b{color:var(--ink)}
+  .meta{font-size:13px;color:var(--muted)}
+  .btn{display:inline-flex;align-items:center;min-height:44px;margin-top:18px;padding:12px 20px;border-radius:6px;background:var(--brand);color:#fff;font-weight:700;text-decoration:none}
+  footer{padding:0 0 50px;font-size:13px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+  footer a{color:var(--muted);min-height:44px;display:inline-flex;align-items:center}
+  @media(max-width:520px){main{padding:26px 20px}h1{font-size:30px}}
+</style>
+<script data-posthog-fleet>(function(){if(window.__posthogFleet)return;window.__posthogFleet=1;var s=document.createElement('script');s.async=true;s.src='https://us-assets.i.posthog.com/static/array.js';s.onload=function(){if(!window.posthog||!window.posthog.init)return;window.posthog.init('phc_FCpCP9mIsb9IcxpX0Qqi6FmJ48sVvscAYIrZmtRHIq4',{api_host:'https://us.i.posthog.com',person_profiles:'identified_only',capture_pageview:'history_change',capture_pageleave:true,autocapture:false,disable_session_recording:true,disable_surveys:true,loaded:function(p){p.register({site:location.hostname})}});};document.head.appendChild(s);})();</script>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="/"><span class="dot"></span>cleared.chat</a>
+    <div class="links"><a href="/about">About</a><a href="/about#contact">Contact</a><a href="/privacy">Privacy</a></div>
+  </nav>
+  <main>
+    <h1>About cleared.chat</h1>
+    <p>cleared.chat is a private messaging inbox that ranks every open WhatsApp conversation by importance and urgency, then helps draft a reply in the account owner's own voice. A person reviews every draft and makes the final send decision; triage and drafting never send, react, archive or mark messages as read on their own.</p>
+
+    <h2>Who runs it</h2>
+    <p>cleared.chat is built and operated by Adam Pang, an independent software builder. More about Adam and his other projects is at <a href="https://adampang.com">adampang.com</a>. The full source code is public at <a href="https://github.com/adamtpang/cleared.chat">github.com/adamtpang/cleared.chat</a>, so anyone can read exactly what the app does with messages.</p>
+
+    <h2>How cleared.chat works</h2>
+    <p>cleared.chat connects to WhatsApp as a linked device through Baileys, an unofficial WhatsApp Web client, so no separate desktop bridge is needed. Each conversation gets an importance score and an urgency score from 1 to 5, and their product orders the queue. Received voice notes are transcribed with Faster Whisper so their text can inform the next action and draft.</p>
+    <p>The hosted beta runs at <a href="https://app.cleared.chat">app.cleared.chat</a> with Google sign-in and an isolated worker per account. The self-hosted version runs locally from the public repository. Because Baileys is unofficial, WhatsApp account-policy risk remains, and cleared.chat should never be used for bulk or unsolicited messaging.</p>
+
+    <h2 id="contact">Contact</h2>
+    <p>To contact the operator of cleared.chat, email Adam Pang at <a href="mailto:adamtpang@gmail.com">adamtpang@gmail.com</a> or book time through <a href="https://cal.com/adamtpang">cal.com/adamtpang</a>. Bug reports and feature requests are welcome as issues on the <a href="https://github.com/adamtpang/cleared.chat/issues">GitHub repository</a>.</p>
+    <a class="btn" href="https://app.cleared.chat">Get started with the hosted beta</a>
+  </main>
+  <footer><a href="/">Home</a><a href="/about">About</a><a href="/about#contact">Contact</a><a href="/privacy">Privacy</a><a href="https://github.com/adamtpang/cleared.chat">Source on GitHub</a></footer>
+</div>
+</body>
+</html>

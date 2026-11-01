@@ -197,6 +197,7 @@
     .step{padding:22px}
   }
 </style>
+<script data-posthog-fleet>(function(){if(window.__posthogFleet)return;window.__posthogFleet=1;var s=document.createElement('script');s.async=true;s.src='https://us-assets.i.posthog.com/static/array.js';s.onload=function(){if(!window.posthog||!window.posthog.init)return;window.posthog.init('phc_FCpCP9mIsb9IcxpX0Qqi6FmJ48sVvscAYIrZmtRHIq4',{api_host:'https://us.i.posthog.com',person_profiles:'identified_only',capture_pageview:'history_change',capture_pageleave:true,autocapture:false,disable_session_recording:true,disable_surveys:true,loaded:function(p){p.register({site:location.hostname})}});};document.head.appendChild(s);})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -204,8 +205,10 @@
   <nav>
     <div class="brand"><span class="dot"></span>cleared.chat</div>
     <div class="nav-links">
-      <a href="https://app.cleared.chat">create account</a>
       <a href="#how">how it works</a>
+      <a href="#plans">plans</a>
+      <a href="/about">about</a>
+      <a href="https://app.cleared.chat">sign up</a>
       <a class="gh" href="https://github.com/adamtpang/cleared.chat">GitHub</a>
     </div>
   </nav>
@@ -216,7 +219,7 @@
       <h1 style="margin-top:18px">Your messages, ranked by <span class="g">what matters.</span></h1>
       <p class="lede">cleared.chat turns WhatsApp into one focused queue, ranks open loops by <b>importance × urgency</b>, and helps draft replies in <b>your voice</b>. <b>The agent never sends.</b> You perform every final communication action manually.</p>
       <div class="cta">
-        <a class="btn primary" href="https://app.cleared.chat">Create account</a>
+        <a class="btn primary" href="https://app.cleared.chat">Get started with Google</a>
         <a class="btn ghost" href="#how">How it works</a>
       </div>
       <div class="trust"><span class="d"></span> Drafts, never sends. You're always the last click.</div>
@@ -319,7 +322,7 @@
         <div class="num">1</div>
         <h3>Create your account</h3>
         <p>Open the private web app. No desktop bridge is required.</p>
-        <div style="margin-top:16px"><a class="btn primary" href="https://app.cleared.chat">Create account</a></div>
+        <div style="margin-top:16px"><a class="btn primary" href="https://app.cleared.chat">Sign up with Google</a></div>
         <div class="req">Prefer local? Use the open-source install command.</div>
         <div class="install" title="click to copy"><span class="p">$</span><code>git clone https://github.com/adamtpang/cleared.chat &amp;&amp; cd cleared.chat/web &amp;&amp; npm install &amp;&amp; npm run dev</code><span class="copied">copied!</span></div>
       </div>
@@ -341,13 +344,33 @@
     </div>
   </section>
 
+  <section id="plans">
+    <div class="kicker rv">plans</div>
+    <h2 class="rv">Two ways to run <span class="g">cleared.chat.</span></h2>
+    <p class="sub rv">cleared.chat is offered as a small hosted beta and as public source code you can run yourself. No pricing has been announced for the hosted beta, and nothing on this page asks for payment.</p>
+    <div class="steps">
+      <div class="step rv">
+        <div class="num">1</div>
+        <h3>Hosted beta</h3>
+        <p>The hosted beta of cleared.chat runs at app.cleared.chat with Google sign-in. Each account gets its own isolated WhatsApp worker, message cache, triage history and encrypted AI settings. Beta capacity is limited to a small number of accounts, so sign-up can be closed when the beta is full.</p>
+        <div style="margin-top:16px"><a class="btn primary" href="https://app.cleared.chat">Join the hosted beta</a></div>
+      </div>
+      <div class="step rv">
+        <div class="num">2</div>
+        <h3>Self-hosted</h3>
+        <p>The self-hosted version of cleared.chat runs on your own computer from the public GitHub repository, as a local browser app or a Windows desktop app. Ranking and drafting can use your own logged-in Claude Code or Codex subscription, and voice notes are transcribed locally with Faster Whisper.</p>
+        <div style="margin-top:16px"><a class="btn ghost" href="https://github.com/adamtpang/cleared.chat">View source on GitHub</a></div>
+      </div>
+    </div>
+  </section>
+
   <section style="padding-top:10px">
     <div class="final rv">
       <div class="kicker">built in public</div>
       <h2>Get to inbox zero <span style="color:var(--brand-light)">today.</span></h2>
-      <p class="sub">Create an account, pair WhatsApp once, and work the priority queue. The source remains open for local-first users.</p>
+      <p class="sub">Getting started with cleared.chat takes three steps: sign in with Google, pair WhatsApp once from Settings, and work the priority queue from the top. The source code stays public on GitHub for anyone who prefers to run the inbox locally.</p>
       <div class="cta">
-        <a class="btn primary" href="https://app.cleared.chat">Create account</a>
+        <a class="btn primary" href="https://app.cleared.chat">Get started</a>
         <a class="btn ghost" href="https://github.com/adamtpang/cleared.chat">View source</a>
       </div>
     </div>
@@ -357,6 +380,7 @@
     <span class="r0"><span class="d"></span> Rule 0: agents never send</span>
     <span>Use it on the web or run it locally</span>
     <span>Made with Claude Code · <a href="https://github.com/adamtpang/cleared.chat">source on GitHub</a></span>
+    <span><a href="/about">About</a> · <a href="/about#contact">Contact</a> · <a href="/privacy">Privacy</a></span>
     <span>More from adam.inc · <a href="https://adam.gives">the menu ↗</a></span>
   </footer>
 </div>
